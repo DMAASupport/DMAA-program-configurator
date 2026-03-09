@@ -362,16 +362,23 @@ function renderProgramTable() {
     tr.innerHTML = `
       <td>
         <div style="display:flex; align-items:center;">
-          <input type="color" value="${prog.color}" style="width:24px; height:24px; border:none; padding:0; background:none; cursor:pointer; margin-right:8px; border-radius:50%;" onchange="updateProgramColor('${prog.id}', this.value)">
-          <input type="text" value="${escapeHtml(prog.name)}" class="pct-input" style="width:140px; text-align:left; font-size:13px;" onchange="updateProgramName('${prog.id}', this.value)">
+          <div class="color-picker-wrapper" style="background-color: ${prog.color};">
+            <input type="color" value="${prog.color}" class="color-picker" onchange="updateProgramColor('${prog.id}', this.value)">
+          </div>
+          <input type="text" value="${escapeHtml(prog.name)}" class="table-input text-input" onchange="updateProgramName('${prog.id}', this.value)">
         </div>
       </td>
       <td>
-        <input type="number" class="pct-input" value="${prog.share}" onchange="updateProgramShare('${prog.id}', this.value)">
+        <div class="input-with-suffix">
+          <input type="number" class="table-input num-input pct-value" value="${prog.share}" onchange="updateProgramShare('${prog.id}', this.value)" min="0" max="100" step="0.1">
+          <span class="suffix">%</span>
+        </div>
       </td>
-      <td id="area-${prog.id}">0</td>
-      <td style="width:40px; text-align:center;">
-        <button class="btn btn-ghost" style="padding:4px; color:var(--text-danger);" onclick="removeProgramType('${prog.id}')">×</button>
+      <td id="area-${prog.id}" class="area-value">0 <span class="unit-text">m²</span></td>
+      <td style="width:50px; text-align:center;">
+        <button class="btn-icon danger-icon" onclick="removeProgramType('${prog.id}')" title="Remove Program">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -389,22 +396,42 @@ function renderCatalogTable() {
     
     if (prog.isSurface) {
       dimsMarkup = `
-        <td colspan="3" style="text-align:center; color:var(--text-muted);">Surface — N/A</td>
-        <td>1 surf.</td>
+        <td colspan="3" style="text-align:center; color:var(--text-muted); font-size:13px; font-weight:500; font-style:italic;">Surface Area (N/A)</td>
+        <td><div class="badge-surface">1 surface</div></td>
       `;
     } else {
       const d = prog.dims || {l:10, w:10, h:4};
       dimsMarkup = `
-        <td><input type="number" class="dim-input" value="${d.l}" onchange="updateProgramDim('${prog.id}', 'l', this.value)"></td>
-        <td><input type="number" class="dim-input" value="${d.w}" onchange="updateProgramDim('${prog.id}', 'w', this.value)"></td>
-        <td><input type="number" class="dim-input" value="${d.h}" onchange="updateProgramDim('${prog.id}', 'h', this.value)"></td>
-        <td id="box-count-${prog.id}" style="font-weight:700;">0</td>
+        <td>
+          <div class="input-with-suffix">
+            <input type="number" class="table-input num-input dim-val" value="${d.l}" onchange="updateProgramDim('${prog.id}', 'l', this.value)" min="1">
+            <span class="suffix">m</span>
+          </div>
+        </td>
+        <td>
+          <div class="input-with-suffix">
+            <input type="number" class="table-input num-input dim-val" value="${d.w}" onchange="updateProgramDim('${prog.id}', 'w', this.value)" min="1">
+            <span class="suffix">m</span>
+          </div>
+        </td>
+        <td>
+          <div class="input-with-suffix">
+            <input type="number" class="table-input num-input dim-val" value="${d.h}" onchange="updateProgramDim('${prog.id}', 'h', this.value)" min="1">
+            <span class="suffix">m</span>
+          </div>
+        </td>
+        <td><div id="box-count-${prog.id}" class="box-count-badge">0</div></td>
       `;
     }
 
     tr.innerHTML = `
-      <td><span class="program-color-dot" style="background: ${prog.color};"></span>${escapeHtml(prog.name)}</td>
-      <td id="3d-gfa-${prog.id}">0</td>
+      <td>
+        <div style="display:flex; align-items:center;">
+          <span class="program-color-dot" style="background: ${prog.color}; box-shadow: 0 0 8px ${prog.color}aa;"></span>
+          <span style="font-weight:600; font-size:14px;">${escapeHtml(prog.name)}</span>
+        </div>
+      </td>
+      <td id="3d-gfa-${prog.id}" class="area-value">0 <span class="unit-text">m²</span></td>
       ${dimsMarkup}
     `;
     tbody.appendChild(tr);
@@ -622,10 +649,10 @@ function calculate() {
     
     // Update DOM cells if table is rendered
     const elTable = document.getElementById('area-' + p.id);
-    if (elTable) elTable.textContent = computedGFA[p.id].toLocaleString();
+    if (elTable) elTable.innerHTML = computedGFA[p.id].toLocaleString() + ' <span class="unit-text">m²</span>';
     
     const el3D = document.getElementById('3d-gfa-' + p.id);
-    if (el3D) el3D.textContent = computedGFA[p.id].toLocaleString();
+    if (el3D) el3D.innerHTML = computedGFA[p.id].toLocaleString() + ' <span class="unit-text">m²</span>';
   });
 
   const totalArea = Math.round(totalGFA * (totalPct / 100));
