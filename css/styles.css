@@ -418,6 +418,7 @@ body::before {
 
 /* --- New Project Card --- */
 .new-project-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -759,6 +760,7 @@ body::before {
 }
 
 .kpi-card {
+  position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
@@ -1134,6 +1136,7 @@ body::before {
 }
 
 .overview-panel {
+  position: relative;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
@@ -1522,6 +1525,52 @@ body::before {
   background: var(--accent-cyan);
   flex-shrink: 0;
 }
+
+/* ─── Shine Border Effect ─────────────────────────────────── */
+@keyframes shine {
+  0%   { background-position: 0% 0%; }
+  50%  { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+.project-card::before,
+.new-project-card::before,
+.kpi-card::before,
+.overview-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background-image: radial-gradient(
+    transparent,
+    transparent 40%,
+    var(--accent-cyan),
+    var(--accent-lavender),
+    var(--accent-coral),
+    transparent 60%,
+    transparent
+  );
+  background-size: 300% 300%;
+  animation: shine 8s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.project-card:hover::before    { opacity: 1; }
+.new-project-card:hover::before { opacity: 1; }
+.kpi-card:hover::before        { opacity: 0.8; }
+.overview-panel:hover::before  { opacity: 0.6; }
 
 /* ─── Responsive additions ────────────────────────────────── */
 @media (max-width: 1200px) {
