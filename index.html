@@ -51,11 +51,18 @@
                     <h1>Your Projects</h1>
                     <p>Shape visionary environments. Configure the spatial backbone of your next architectural masterplan and deploy vibrant, data-driven catalogs into the third dimension.</p>
                 </div>
-                <div class="search-bar-wrapper">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="search-icon">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                    <input type="text" class="search-input" placeholder="Search projects…" oninput="filterDashboard(this.value)">
+                <div class="search-filter-stack">
+                    <div class="search-bar-wrapper">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="search-icon">
+                            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                        <input type="text" class="search-input" placeholder="Search projects…" oninput="filterDashboard(this.value)">
+                    </div>
+                    <div class="filter-chips">
+                        <button class="filter-chip active" data-filter="all"     onclick="setStatusFilter('all')">All</button>
+                        <button class="filter-chip"        data-filter="ongoing" onclick="setStatusFilter('ongoing')">Ongoing</button>
+                        <button class="filter-chip"        data-filter="past"    onclick="setStatusFilter('past')">Past</button>
+                    </div>
                 </div>
             </div>
 
@@ -199,7 +206,15 @@
                                 </select>
                             </div>
                             <div class="control-group">
-                                <label>Target Employees <span class="info-dot" data-tooltip="Estimated headcount working at this location">i</span></label>
+                                <label>Occupant Label</label>
+                                <select id="edit-occupant-label" onchange="saveCurrentProject()">
+                                    <option value="Employees">Employees</option>
+                                    <option value="Residents">Residents</option>
+                                    <option value="Occupants">Occupants</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Target Occupants <span class="info-dot" data-tooltip="Estimated headcount working at this location">i</span></label>
                                 <input type="number" id="employees" value="5000" oninput="calculate()">
                             </div>
                             <div class="control-group">
@@ -415,6 +430,30 @@
             <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary" onclick="createNewProject()">Create Project</button>
         </div>
+    </div>
+</div>
+
+<!-- Compare Bar (floating) -->
+<div id="compare-bar" style="display:none;">
+    <span class="compare-bar-count"></span>
+    <button class="btn btn-primary" onclick="openCompareModal()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        Compare
+    </button>
+    <button class="btn btn-ghost" onclick="clearCompare()">Clear</button>
+</div>
+
+<!-- Compare Modal -->
+<div id="compare-modal" class="modal-overlay" onclick="if(event.target===this)closeCompareModal()">
+    <div class="modal compare-modal-inner">
+        <div class="compare-modal-header">
+            <h2>Project Comparison</h2>
+            <button class="btn btn-ghost" onclick="closeCompareModal()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                Close
+            </button>
+        </div>
+        <div id="compare-modal-body"></div>
     </div>
 </div>
 

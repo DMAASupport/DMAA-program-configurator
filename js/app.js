@@ -10,6 +10,7 @@ function migrateProject(p) {
   if (p.projectCode === undefined) p.projectCode = '';
   if (p.status === undefined) p.status = 'ongoing';
   if (p.images === undefined) p.images = [];
+  if (p.occupantLabel === undefined) p.occupantLabel = 'Employees';
 
   if (p.programs) {
     // Migrate program-level fields added in v2
@@ -50,6 +51,7 @@ const Store = {
       client: 'Confidential',
       typology: 'AI / Technology Campus',
       status: 'ongoing',
+      occupantLabel: 'Employees',
       employees: 5000,
       gfaPerEmp: 25,
       benchmark: 'custom',
@@ -69,6 +71,7 @@ const Store = {
       client: 'City of Frankfurt',
       typology: 'Mixed-Use High-Rise',
       status: 'past',
+      occupantLabel: 'Occupants',
       employees: 1200,
       gfaPerEmp: 24,
       benchmark: 'custom',
@@ -91,6 +94,7 @@ const Store = {
       client: 'City of Vienna',
       typology: 'Residential',
       status: 'past',
+      occupantLabel: 'Residents',
       employees: 260,
       gfaPerEmp: 44,
       benchmark: 'custom',
@@ -123,6 +127,7 @@ const Store = {
           } else {
             if (seed.status) existing.status = seed.status;
             if (seed.projectCode) existing.projectCode = seed.projectCode;
+            if (seed.occupantLabel) existing.occupantLabel = seed.occupantLabel;
           }
         });
         this.save(projects);
@@ -200,8 +205,10 @@ let meshesGroup;
 // Drag-to-reorder state
 let dragSrcId = null;
 
-// Dashboard search state
-let dashboardSearchQuery = '';
+// Dashboard state
+let dashboardSearchQuery  = '';
+let dashboardStatusFilter = 'all';
+let compareSelection      = [];
 
 // Save status debounce
 let saveStatusTimer = null;
@@ -305,14 +312,17 @@ function duplicateProject(id) {
 
 // ─── Dashboard ─────────────────────────────────────────────
 function buildProjectCard(proj, idx) {
-  const totalGFA = proj.employees * proj.gfaPerEmp;
-  const programBar = (proj.programs || [])
+  const totalGFA     = proj.employees * proj.gfaPerEmp;
+  const occLabel     = proj.occupantLabel || 'Employees';
+  const isComparing  = compareSelection.includes(proj.id);
+  const programBar   = (proj.programs || [])
     .filter(p => p.share > 0)
     .map(p => `<div style="flex:${p.share}; background:${p.color};" title="${escapeHtml(p.name)}: ${p.share}%"></div>`)
     .join('');
 
   const card = document.createElement('div');
-  card.className = 'project-card';
+  card.className = 'project-card' + (isComparing ? ' comparing' : '');
+  card.id = 'card-' + proj.id;
   card.style.animationDelay = `${0.15 + idx * 0.1}s`;
   card.innerHTML = `
     <div class="project-card-gradient"></div>
@@ -326,16 +336,20 @@ function buildProjectCard(proj, idx) {
       <div class="project-card-stats">
         <div class="stat-item">
           <span class="stat-label">Total GFA</span>
-          <span class="stat-value">${totalGFA.toLocaleString()}</span>
+          <span class="stat-value">${totalGFA.toLocaleString()} m²</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Employees</span>
+          <span class="stat-label">${escapeHtml(occLabel)}</span>
           <span class="stat-value">${proj.employees.toLocaleString()}</span>
         </div>
       </div>
     </div>
     <div class="program-bar">${programBar}</div>
     <div class="project-card-actions">
+      <button class="btn btn-ghost card-action-btn compare-btn ${isComparing ? 'active' : ''}" onclick="event.stopPropagation(); toggleCompare('${proj.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+        ${isComparing ? 'Remove' : 'Compare'}
+      </button>
       <button class="btn btn-ghost card-action-btn" onclick="event.stopPropagation(); duplicateProject('${proj.id}')">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
         Duplicate
@@ -353,46 +367,61 @@ function renderDashboard() {
   const container = document.getElementById('dashboard-sections');
   let projects = Store.load();
 
-  // Apply search filter
-  const query = dashboardSearchQuery.toLowerCase();
+  // Text search — name, client, typology, code, notes, GFA
+  const query = dashboardSearchQuery.toLowerCase().trim();
   if (query) {
-    projects = projects.filter(p =>
-      p.name.toLowerCase().includes(query) ||
-      p.client.toLowerCase().includes(query) ||
-      p.typology.toLowerCase().includes(query) ||
-      (p.projectCode && p.projectCode.toLowerCase().includes(query))
-    );
+    projects = projects.filter(p => {
+      const totalGFA = String(p.employees * p.gfaPerEmp);
+      return p.name.toLowerCase().includes(query) ||
+        p.client.toLowerCase().includes(query) ||
+        p.typology.toLowerCase().includes(query) ||
+        (p.projectCode && p.projectCode.toLowerCase().includes(query)) ||
+        (p.notes && p.notes.toLowerCase().includes(query)) ||
+        totalGFA.includes(query);
+    });
   }
 
-  const ongoing = projects.filter(p => (p.status || 'ongoing') === 'ongoing');
-  const past    = projects.filter(p => p.status === 'past');
+  // Status filter chips
+  let ongoing = projects.filter(p => (p.status || 'ongoing') === 'ongoing');
+  let past    = projects.filter(p => p.status === 'past');
+  if (dashboardStatusFilter === 'ongoing') past    = [];
+  if (dashboardStatusFilter === 'past')    ongoing = [];
 
   container.innerHTML = '';
 
   // ── Ongoing section ──
-  const ongoingSection = document.createElement('div');
-  ongoingSection.className = 'project-section';
-  ongoingSection.innerHTML = '<h2 class="section-heading">Ongoing Projects</h2>';
+  if (dashboardStatusFilter !== 'past') {
+    const ongoingSection = document.createElement('div');
+    ongoingSection.className = 'project-section';
+    ongoingSection.innerHTML = `
+      <div class="section-heading-row">
+        <span class="section-heading">Ongoing</span>
+        <span class="section-count">${ongoing.length}</span>
+      </div>`;
 
-  const ongoingGrid = document.createElement('div');
-  ongoingGrid.className = 'projects-grid';
-  ongoingGrid.innerHTML = `
-    <div class="new-project-card" onclick="openNewProjectModal()">
-      <div class="new-project-icon">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </div>
-      <span>Create New Project</span>
-    </div>
-  `;
-  ongoing.forEach((proj, idx) => ongoingGrid.appendChild(buildProjectCard(proj, idx)));
-  ongoingSection.appendChild(ongoingGrid);
-  container.appendChild(ongoingSection);
+    const ongoingGrid = document.createElement('div');
+    ongoingGrid.className = 'projects-grid';
+    ongoingGrid.innerHTML = `
+      <div class="new-project-card" onclick="openNewProjectModal()">
+        <div class="new-project-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </div>
+        <span>Create New Project</span>
+      </div>`;
+    ongoing.forEach((proj, idx) => ongoingGrid.appendChild(buildProjectCard(proj, idx)));
+    ongoingSection.appendChild(ongoingGrid);
+    container.appendChild(ongoingSection);
+  }
 
   // ── Past section ──
-  if (past.length > 0) {
+  if (dashboardStatusFilter !== 'ongoing' && past.length > 0) {
     const pastSection = document.createElement('div');
     pastSection.className = 'project-section';
-    pastSection.innerHTML = '<h2 class="section-heading">Past Projects</h2>';
+    pastSection.innerHTML = `
+      <div class="section-heading-row">
+        <span class="section-heading">Past Projects</span>
+        <span class="section-count">${past.length}</span>
+      </div>`;
 
     const pastGrid = document.createElement('div');
     pastGrid.className = 'projects-grid';
@@ -400,18 +429,124 @@ function renderDashboard() {
     pastSection.appendChild(pastGrid);
     container.appendChild(pastSection);
   }
-}
 
-function deleteProject(id) {
-  if (confirm('Delete this project? This cannot be undone.')) {
-    Store.remove(id);
-    renderDashboard();
-  }
+  // Update compare bar
+  updateCompareBar();
 }
 
 function filterDashboard(query) {
   dashboardSearchQuery = query;
   renderDashboard();
+}
+
+function setStatusFilter(filter) {
+  dashboardStatusFilter = filter;
+  document.querySelectorAll('.filter-chip').forEach(el =>
+    el.classList.toggle('active', el.dataset.filter === filter)
+  );
+  renderDashboard();
+}
+
+function deleteProject(id) {
+  if (confirm('Delete this project? This cannot be undone.')) {
+    Store.remove(id);
+    compareSelection = compareSelection.filter(x => x !== id);
+    renderDashboard();
+  }
+}
+
+
+// ─── Compare ───────────────────────────────────────────────
+function toggleCompare(id) {
+  if (compareSelection.includes(id)) {
+    compareSelection = compareSelection.filter(x => x !== id);
+  } else {
+    if (compareSelection.length >= 4) compareSelection.shift(); // max 4
+    compareSelection.push(id);
+  }
+  renderDashboard();
+}
+
+function updateCompareBar() {
+  const bar = document.getElementById('compare-bar');
+  if (!bar) return;
+  if (compareSelection.length >= 2) {
+    bar.style.display = 'flex';
+    bar.querySelector('.compare-bar-count').textContent =
+      `${compareSelection.length} project${compareSelection.length > 1 ? 's' : ''} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearCompare() {
+  compareSelection = [];
+  renderDashboard();
+}
+
+function openCompareModal() {
+  const projects = compareSelection.map(id => Store.get(id)).filter(Boolean);
+  if (projects.length < 2) return;
+
+  const modal = document.getElementById('compare-modal');
+  const body  = document.getElementById('compare-modal-body');
+
+  // Build columns
+  const cols = projects.map(p => {
+    const totalGFA = p.employees * p.gfaPerEmp;
+    const occLabel = p.occupantLabel || 'Employees';
+    const programRows = (p.programs || []).map(prog => {
+      const gfa = Math.round((prog.share / 100) * totalGFA);
+      return `<div class="cmp-program-row">
+        <div class="cmp-program-color" style="background:${prog.color}"></div>
+        <div class="cmp-program-name">${escapeHtml(prog.name)}</div>
+        <div class="cmp-program-share">${prog.share}%</div>
+        <div class="cmp-program-gfa">${gfa.toLocaleString()}</div>
+      </div>`;
+    }).join('');
+
+    const statusBadge = p.status === 'past'
+      ? `<span class="cmp-status-badge past">Past</span>`
+      : `<span class="cmp-status-badge ongoing">Ongoing</span>`;
+
+    return `
+      <div class="cmp-col">
+        <div class="cmp-col-header">
+          ${p.projectCode ? `<span class="project-card-code">${escapeHtml(p.projectCode)}</span>` : ''}
+          ${statusBadge}
+          <div class="cmp-col-name">${escapeHtml(p.name)}</div>
+          <div class="cmp-col-meta">${escapeHtml(p.client)} · ${escapeHtml(p.typology)}</div>
+        </div>
+        <div class="cmp-stat-row">
+          <span class="cmp-stat-label">Total GFA</span>
+          <span class="cmp-stat-value">${totalGFA.toLocaleString()} m²</span>
+        </div>
+        <div class="cmp-stat-row">
+          <span class="cmp-stat-label">${escapeHtml(occLabel)}</span>
+          <span class="cmp-stat-value">${p.employees.toLocaleString()}</span>
+        </div>
+        <div class="cmp-stat-row">
+          <span class="cmp-stat-label">GFA / ${escapeHtml(occLabel.replace(/s$/, ''))}</span>
+          <span class="cmp-stat-value">${p.gfaPerEmp} m²</span>
+        </div>
+        ${p.siteArea ? `<div class="cmp-stat-row">
+          <span class="cmp-stat-label">Site Area</span>
+          <span class="cmp-stat-value">${p.siteArea.toLocaleString()} m²</span>
+        </div>` : ''}
+        <div class="cmp-programs-label">Programs</div>
+        <div class="cmp-program-bar">
+          ${(p.programs||[]).map(prog => `<div style="flex:${prog.share};background:${prog.color}" title="${escapeHtml(prog.name)}: ${prog.share}%"></div>`).join('')}
+        </div>
+        <div class="cmp-programs-list">${programRows}</div>
+      </div>`;
+  }).join('');
+
+  body.innerHTML = `<div class="cmp-grid">${cols}</div>`;
+  modal.classList.add('active');
+}
+
+function closeCompareModal() {
+  document.getElementById('compare-modal').classList.remove('active');
 }
 
 
@@ -449,16 +584,17 @@ function initEditor() {
   document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
 
   // Always populate form fields (they persist in DOM even when hidden)
-  document.getElementById('edit-project-code').value   = currentProject.projectCode || '';
-  document.getElementById('edit-project-status').value = currentProject.status || 'ongoing';
-  document.getElementById('edit-name').value           = currentProject.name;
-  document.getElementById('edit-client').value         = currentProject.client;
-  document.getElementById('edit-typology').value       = currentProject.typology;
-  document.getElementById('edit-notes').value          = currentProject.notes || '';
-  document.getElementById('benchmark').value           = currentProject.benchmark;
-  document.getElementById('employees').value           = currentProject.employees;
-  document.getElementById('gfaPerEmp').value           = currentProject.gfaPerEmp;
-  document.getElementById('siteArea').value            = currentProject.siteArea || 0;
+  document.getElementById('edit-project-code').value    = currentProject.projectCode || '';
+  document.getElementById('edit-project-status').value  = currentProject.status || 'ongoing';
+  document.getElementById('edit-name').value            = currentProject.name;
+  document.getElementById('edit-client').value          = currentProject.client;
+  document.getElementById('edit-typology').value        = currentProject.typology;
+  document.getElementById('edit-notes').value           = currentProject.notes || '';
+  document.getElementById('edit-occupant-label').value  = currentProject.occupantLabel || 'Employees';
+  document.getElementById('benchmark').value            = currentProject.benchmark;
+  document.getElementById('employees').value            = currentProject.employees;
+  document.getElementById('gfaPerEmp').value            = currentProject.gfaPerEmp;
+  document.getElementById('siteArea').value             = currentProject.siteArea || 0;
 
   if (isPast) renderPastOverview();
   renderGallery();
@@ -517,6 +653,7 @@ function renderPastOverview() {
   const totalGFA  = currentProject.employees * currentProject.gfaPerEmp;
   const programs  = currentProject.programs || [];
   const year      = (currentProject.createdAt || '').split('-')[0];
+  const occLabel  = currentProject.occupantLabel || 'Occupants';
 
   const programRows = programs.map(p => {
     const gfa = Math.round((p.share / 100) * totalGFA);
@@ -550,11 +687,11 @@ function renderPastOverview() {
         <div class="past-stat-value">${totalGFA.toLocaleString()}<span class="past-stat-unit"> m²</span></div>
       </div>
       <div class="past-stat-card">
-        <div class="past-stat-label">Occupants</div>
+        <div class="past-stat-label">${escapeHtml(occLabel)}</div>
         <div class="past-stat-value">${currentProject.employees.toLocaleString()}</div>
       </div>
       <div class="past-stat-card">
-        <div class="past-stat-label">GFA / Occupant</div>
+        <div class="past-stat-label">GFA / ${escapeHtml(occLabel.replace(/s$/i, ''))}</div>
         <div class="past-stat-value">${currentProject.gfaPerEmp}<span class="past-stat-unit"> m²</span></div>
       </div>
       ${currentProject.siteArea ? `
@@ -885,16 +1022,17 @@ function saveCurrentProject() {
   if (!currentProject) return;
   showSaveStatus('saving');
 
-  currentProject.projectCode = document.getElementById('edit-project-code').value.trim();
-  currentProject.status      = document.getElementById('edit-project-status').value;
-  currentProject.name        = document.getElementById('edit-name').value.trim()     || currentProject.name;
-  currentProject.client      = document.getElementById('edit-client').value.trim()   || currentProject.client;
-  currentProject.typology    = document.getElementById('edit-typology').value.trim() || currentProject.typology;
-  currentProject.notes       = document.getElementById('edit-notes').value;
-  currentProject.benchmark = document.getElementById('benchmark').value;
-  currentProject.employees = parseFloat(document.getElementById('employees').value) || 0;
-  currentProject.gfaPerEmp = parseFloat(document.getElementById('gfaPerEmp').value) || 0;
-  currentProject.siteArea  = parseFloat(document.getElementById('siteArea').value)  || 0;
+  currentProject.projectCode    = document.getElementById('edit-project-code').value.trim();
+  currentProject.status         = document.getElementById('edit-project-status').value;
+  currentProject.name           = document.getElementById('edit-name').value.trim()     || currentProject.name;
+  currentProject.client         = document.getElementById('edit-client').value.trim()   || currentProject.client;
+  currentProject.typology       = document.getElementById('edit-typology').value.trim() || currentProject.typology;
+  currentProject.notes          = document.getElementById('edit-notes').value;
+  currentProject.occupantLabel  = document.getElementById('edit-occupant-label').value || 'Employees';
+  currentProject.benchmark      = document.getElementById('benchmark').value;
+  currentProject.employees      = parseFloat(document.getElementById('employees').value) || 0;
+  currentProject.gfaPerEmp      = parseFloat(document.getElementById('gfaPerEmp').value) || 0;
+  currentProject.siteArea       = parseFloat(document.getElementById('siteArea').value)  || 0;
 
   // Keep breadcrumb in sync
   document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
