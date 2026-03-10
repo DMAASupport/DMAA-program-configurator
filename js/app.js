@@ -61,7 +61,7 @@ const Store = {
     {
       id: 'proj-vienna',
       name: 'Vienna Innovation Hub',
-      client: 'Stadt Wien',
+      client: 'City of Vienna',
       typology: 'Mixed-Use Innovation',
       employees: 2200,
       gfaPerEmp: 22,
@@ -96,20 +96,20 @@ const Store = {
       id: 'proj-578',
       projectCode: '578',
       name: 'ga8 Frankfurt',
-      client: 'Stadt Frankfurt',
+      client: 'City of Frankfurt',
       typology: 'Mixed-Use High-Rise',
       employees: 1200,
       gfaPerEmp: 24,
       benchmark: 'custom',
       siteArea: 0,
-      notes: 'Realisierungswettbewerb ga8 Frankfurt. Mixed-use high-rise with office tower, residential tower, hotel, and cultural plinth. Data extracted from F-1 Flächen area schedule.',
+      notes: 'Competition project ga8 Frankfurt. Mixed-use high-rise with office tower, residential tower, hotel, and cultural plinth. Data extracted from area schedule F-1.',
       programs: [
-        { id: 'buero',   name: 'Büro',              color: '#60a5fa', share: 43, dims: { l: 40, w: 40, h: 4   }, isSurface: false, locked: false, nFloors: 30 },
-        { id: 'wohnen',  name: 'Wohnen',             color: '#fb923c', share: 23, dims: { l: 30, w: 30, h: 3   }, isSurface: false, locked: false, nFloors: 16 },
-        { id: 'hotel',   name: 'Hotel',              color: '#a78bfa', share: 14, dims: { l: 25, w: 25, h: 3.5 }, isSurface: false, locked: false, nFloors: 5  },
-        { id: 'innwohn', name: 'Innovatives Wohnen', color: '#fbbf24', share: 12, dims: { l: 20, w: 20, h: 3   }, isSurface: false, locked: false, nFloors: 8  },
-        { id: 'kultur',  name: 'Kunst & Kultur',     color: '#34d399', share:  5, dims: { l: 30, w: 30, h: 6   }, isSurface: false, locked: false, nFloors: 2  },
-        { id: 'sonstig', name: 'Sonstiges',          color: '#00d4ff', share:  3, dims: null,                     isSurface: true,  locked: false, nFloors: 1  }
+        { id: 'buero',   name: 'Office',             color: '#60a5fa', share: 43, dims: { l: 40, w: 40, h: 4   }, isSurface: false, locked: false, nFloors: 30 },
+        { id: 'wohnen',  name: 'Housing',             color: '#fb923c', share: 23, dims: { l: 30, w: 30, h: 3   }, isSurface: false, locked: false, nFloors: 16 },
+        { id: 'hotel',   name: 'Hotel',               color: '#a78bfa', share: 14, dims: { l: 25, w: 25, h: 3.5 }, isSurface: false, locked: false, nFloors: 5  },
+        { id: 'innwohn', name: 'Innovative Housing',  color: '#fbbf24', share: 12, dims: { l: 20, w: 20, h: 3   }, isSurface: false, locked: false, nFloors: 8  },
+        { id: 'kultur',  name: 'Arts & Culture',      color: '#34d399', share:  5, dims: { l: 30, w: 30, h: 6   }, isSurface: false, locked: false, nFloors: 2  },
+        { id: 'sonstig', name: 'Mixed Use',           color: '#00d4ff', share:  3, dims: null,                     isSurface: true,  locked: false, nFloors: 1  }
       ],
       createdAt: '2026-03-10'
     }
