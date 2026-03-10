@@ -409,6 +409,25 @@ body::before {
   max-width: 480px;
 }
 
+/* --- Project Sections --- */
+.project-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.project-section + .project-section {
+  margin-top: var(--space-xl);
+}
+
+.section-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 /* --- Projects Grid --- */
 .projects-grid {
   display: grid;

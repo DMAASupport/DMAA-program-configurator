@@ -59,15 +59,8 @@
                 </div>
             </div>
 
-            <div class="projects-grid" id="projects-grid">
-                <!-- New Project Card (always first) -->
-                <div class="new-project-card" onclick="openNewProjectModal()">
-                    <div class="new-project-icon">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    </div>
-                    <span>Create New Project</span>
-                </div>
-                <!-- Project cards rendered dynamically by JS -->
+            <div id="dashboard-sections">
+                <!-- Sections rendered dynamically by JS -->
             </div>
         </div>
     </div>
@@ -175,6 +168,13 @@
                         <div class="control-group">
                             <label>Typology</label>
                             <input type="text" id="edit-typology" placeholder="e.g. AI / Technology Campus" onchange="saveCurrentProject()">
+                        </div>
+                        <div class="control-group">
+                            <label>Status</label>
+                            <select id="edit-project-status" onchange="saveCurrentProject()">
+                                <option value="ongoing">Ongoing</option>
+                                <option value="past">Past Project</option>
+                            </select>
                         </div>
                     </div>
 

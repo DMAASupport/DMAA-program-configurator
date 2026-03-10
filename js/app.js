@@ -8,6 +8,7 @@ function migrateProject(p) {
   if (p.siteArea === undefined) p.siteArea = 0;
   if (p.notes === undefined) p.notes = '';
   if (p.projectCode === undefined) p.projectCode = '';
+  if (p.status === undefined) p.status = 'ongoing';
 
   if (p.programs) {
     // Migrate program-level fields added in v2
@@ -46,6 +47,7 @@ const Store = {
       name: 'NEOM AI Campus',
       client: 'NEOM Company',
       typology: 'AI / Technology Campus',
+      status: 'ongoing',
       employees: 5000,
       gfaPerEmp: 25,
       benchmark: 'custom',
@@ -64,6 +66,7 @@ const Store = {
       name: 'ga8 Frankfurt',
       client: 'City of Frankfurt',
       typology: 'Mixed-Use High-Rise',
+      status: 'past',
       employees: 1200,
       gfaPerEmp: 24,
       benchmark: 'custom',
@@ -239,6 +242,7 @@ function createNewProject() {
   const newProject = {
     id: 'proj-' + Date.now(),
     name, client, typology, projectCode,
+    status: 'ongoing',
     employees: 5000,
     gfaPerEmp: 25,
     benchmark: 'custom',
@@ -273,8 +277,53 @@ function duplicateProject(id) {
 
 
 // ─── Dashboard ─────────────────────────────────────────────
+function buildProjectCard(proj, idx) {
+  const totalGFA = proj.employees * proj.gfaPerEmp;
+  const programBar = (proj.programs || [])
+    .filter(p => p.share > 0)
+    .map(p => `<div style="flex:${p.share}; background:${p.color};" title="${escapeHtml(p.name)}: ${p.share}%"></div>`)
+    .join('');
+
+  const card = document.createElement('div');
+  card.className = 'project-card';
+  card.style.animationDelay = `${0.15 + idx * 0.1}s`;
+  card.innerHTML = `
+    <div class="project-card-gradient"></div>
+    <div class="project-card-body" onclick="openProject('${proj.id}')">
+      <div class="project-card-header-row">
+        <div class="project-card-typology">${escapeHtml(proj.typology)}</div>
+        ${proj.projectCode ? `<div class="project-card-code">${escapeHtml(proj.projectCode)}</div>` : ''}
+      </div>
+      <div class="project-card-name">${escapeHtml(proj.name)}</div>
+      <div class="project-card-client">${escapeHtml(proj.client)}</div>
+      <div class="project-card-stats">
+        <div class="stat-item">
+          <span class="stat-label">Total GFA</span>
+          <span class="stat-value">${totalGFA.toLocaleString()}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Employees</span>
+          <span class="stat-value">${proj.employees.toLocaleString()}</span>
+        </div>
+      </div>
+    </div>
+    <div class="program-bar">${programBar}</div>
+    <div class="project-card-actions">
+      <button class="btn btn-ghost card-action-btn" onclick="event.stopPropagation(); duplicateProject('${proj.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        Duplicate
+      </button>
+      <button class="btn btn-danger card-action-btn" onclick="event.stopPropagation(); deleteProject('${proj.id}')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+        Delete
+      </button>
+    </div>
+  `;
+  return card;
+}
+
 function renderDashboard() {
-  const grid = document.getElementById('projects-grid');
+  const container = document.getElementById('dashboard-sections');
   let projects = Store.load();
 
   // Apply search filter
@@ -288,55 +337,42 @@ function renderDashboard() {
     );
   }
 
-  // Remove old project cards (keep the static new-project-card)
-  grid.querySelectorAll('.project-card').forEach(c => c.remove());
+  const ongoing = projects.filter(p => (p.status || 'ongoing') === 'ongoing');
+  const past    = projects.filter(p => p.status === 'past');
 
-  projects.forEach((proj, idx) => {
-    const totalGFA = proj.employees * proj.gfaPerEmp;
+  container.innerHTML = '';
 
-    // Program bar segments
-    const programBar = (proj.programs || [])
-      .filter(p => p.share > 0)
-      .map(p => `<div style="flex:${p.share}; background:${p.color};" title="${escapeHtml(p.name)}: ${p.share}%"></div>`)
-      .join('');
+  // ── Ongoing section ──
+  const ongoingSection = document.createElement('div');
+  ongoingSection.className = 'project-section';
+  ongoingSection.innerHTML = '<h2 class="section-heading">Ongoing Projects</h2>';
 
-    const card = document.createElement('div');
-    card.className = 'project-card';
-    card.style.animationDelay = `${0.15 + idx * 0.1}s`;
-    card.innerHTML = `
-      <div class="project-card-gradient"></div>
-      <div class="project-card-body" onclick="openProject('${proj.id}')">
-        <div class="project-card-header-row">
-          <div class="project-card-typology">${escapeHtml(proj.typology)}</div>
-          ${proj.projectCode ? `<div class="project-card-code">${escapeHtml(proj.projectCode)}</div>` : ''}
-        </div>
-        <div class="project-card-name">${escapeHtml(proj.name)}</div>
-        <div class="project-card-client">${escapeHtml(proj.client)}</div>
-        <div class="project-card-stats">
-          <div class="stat-item">
-            <span class="stat-label">Total GFA</span>
-            <span class="stat-value">${totalGFA.toLocaleString()}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Employees</span>
-            <span class="stat-value">${proj.employees.toLocaleString()}</span>
-          </div>
-        </div>
+  const ongoingGrid = document.createElement('div');
+  ongoingGrid.className = 'projects-grid';
+  ongoingGrid.innerHTML = `
+    <div class="new-project-card" onclick="openNewProjectModal()">
+      <div class="new-project-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </div>
-      <div class="program-bar">${programBar}</div>
-      <div class="project-card-actions">
-        <button class="btn btn-ghost card-action-btn" onclick="event.stopPropagation(); duplicateProject('${proj.id}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-          Duplicate
-        </button>
-        <button class="btn btn-danger card-action-btn" onclick="event.stopPropagation(); deleteProject('${proj.id}')">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-          Delete
-        </button>
-      </div>
-    `;
-    grid.appendChild(card);
-  });
+      <span>Create New Project</span>
+    </div>
+  `;
+  ongoing.forEach((proj, idx) => ongoingGrid.appendChild(buildProjectCard(proj, idx)));
+  ongoingSection.appendChild(ongoingGrid);
+  container.appendChild(ongoingSection);
+
+  // ── Past section ──
+  if (past.length > 0) {
+    const pastSection = document.createElement('div');
+    pastSection.className = 'project-section';
+    pastSection.innerHTML = '<h2 class="section-heading">Past Projects</h2>';
+
+    const pastGrid = document.createElement('div');
+    pastGrid.className = 'projects-grid';
+    past.forEach((proj, idx) => pastGrid.appendChild(buildProjectCard(proj, ongoing.length + idx)));
+    pastSection.appendChild(pastGrid);
+    container.appendChild(pastSection);
+  }
 }
 
 function deleteProject(id) {
@@ -373,8 +409,9 @@ function initEditor() {
   if (!currentProject) return;
 
   document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
-  document.getElementById('edit-project-code').value = currentProject.projectCode || '';
-  document.getElementById('edit-name').value          = currentProject.name;
+  document.getElementById('edit-project-code').value   = currentProject.projectCode || '';
+  document.getElementById('edit-project-status').value = currentProject.status || 'ongoing';
+  document.getElementById('edit-name').value            = currentProject.name;
   document.getElementById('edit-client').value        = currentProject.client;
   document.getElementById('edit-typology').value      = currentProject.typology;
   document.getElementById('edit-notes').value         = currentProject.notes || '';
@@ -654,6 +691,7 @@ function saveCurrentProject() {
   showSaveStatus('saving');
 
   currentProject.projectCode = document.getElementById('edit-project-code').value.trim();
+  currentProject.status      = document.getElementById('edit-project-status').value;
   currentProject.name        = document.getElementById('edit-name').value.trim()     || currentProject.name;
   currentProject.client      = document.getElementById('edit-client').value.trim()   || currentProject.client;
   currentProject.typology    = document.getElementById('edit-typology').value.trim() || currentProject.typology;
