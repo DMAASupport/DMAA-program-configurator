@@ -591,14 +591,34 @@ body::before {
   gap: var(--space-lg);
 }
 
-.editor-logo {
-  height: 160px;
-  object-fit: contain;
-  opacity: 0.7;
-  transition: opacity var(--duration-fast);
+.editor-wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-md) 0;
+  border-right: 1px solid var(--glass-border);
+  padding-right: var(--space-lg);
 }
-.editor-logo:hover {
-  opacity: 1;
+
+.editor-wordmark-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+  line-height: 1;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent-cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.editor-wordmark-sub {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  line-height: 1;
 }
 
 .breadcrumb {
