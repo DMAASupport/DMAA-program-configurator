@@ -7,6 +7,7 @@ function migrateProject(p) {
   // Top-level new fields
   if (p.siteArea === undefined) p.siteArea = 0;
   if (p.notes === undefined) p.notes = '';
+  if (p.projectCode === undefined) p.projectCode = '';
 
   if (p.programs) {
     // Migrate program-level fields added in v2
@@ -228,14 +229,16 @@ function createNewProject() {
   const nameInput     = document.getElementById('modal-project-name');
   const clientInput   = document.getElementById('modal-project-client');
   const typologyInput = document.getElementById('modal-project-typology');
+  const codeInput     = document.getElementById('modal-project-code');
 
-  const name     = nameInput.value.trim()     || 'Untitled Project';
-  const client   = clientInput.value.trim()   || 'Client TBD';
-  const typology = typologyInput.value.trim() || 'Mixed-Use';
+  const name        = nameInput.value.trim()     || 'Untitled Project';
+  const client      = clientInput.value.trim()   || 'Client TBD';
+  const typology    = typologyInput.value.trim() || 'Mixed-Use';
+  const projectCode = codeInput ? codeInput.value.trim() : '';
 
   const newProject = {
     id: 'proj-' + Date.now(),
-    name, client, typology,
+    name, client, typology, projectCode,
     employees: 5000,
     gfaPerEmp: 25,
     benchmark: 'custom',
@@ -280,7 +283,8 @@ function renderDashboard() {
     projects = projects.filter(p =>
       p.name.toLowerCase().includes(query) ||
       p.client.toLowerCase().includes(query) ||
-      p.typology.toLowerCase().includes(query)
+      p.typology.toLowerCase().includes(query) ||
+      (p.projectCode && p.projectCode.toLowerCase().includes(query))
     );
   }
 
@@ -302,7 +306,10 @@ function renderDashboard() {
     card.innerHTML = `
       <div class="project-card-gradient"></div>
       <div class="project-card-body" onclick="openProject('${proj.id}')">
-        <div class="project-card-typology">${escapeHtml(proj.typology)}</div>
+        <div class="project-card-header-row">
+          <div class="project-card-typology">${escapeHtml(proj.typology)}</div>
+          ${proj.projectCode ? `<div class="project-card-code">${escapeHtml(proj.projectCode)}</div>` : ''}
+        </div>
         <div class="project-card-name">${escapeHtml(proj.name)}</div>
         <div class="project-card-client">${escapeHtml(proj.client)}</div>
         <div class="project-card-stats">
@@ -366,10 +373,11 @@ function initEditor() {
   if (!currentProject) return;
 
   document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
-  document.getElementById('edit-name').value      = currentProject.name;
-  document.getElementById('edit-client').value    = currentProject.client;
-  document.getElementById('edit-typology').value  = currentProject.typology;
-  document.getElementById('edit-notes').value     = currentProject.notes || '';
+  document.getElementById('edit-project-code').value = currentProject.projectCode || '';
+  document.getElementById('edit-name').value          = currentProject.name;
+  document.getElementById('edit-client').value        = currentProject.client;
+  document.getElementById('edit-typology').value      = currentProject.typology;
+  document.getElementById('edit-notes').value         = currentProject.notes || '';
   document.getElementById('benchmark').value      = currentProject.benchmark;
   document.getElementById('employees').value      = currentProject.employees;
   document.getElementById('gfaPerEmp').value      = currentProject.gfaPerEmp;
@@ -645,10 +653,11 @@ function saveCurrentProject() {
   if (!currentProject) return;
   showSaveStatus('saving');
 
-  currentProject.name     = document.getElementById('edit-name').value.trim()     || currentProject.name;
-  currentProject.client   = document.getElementById('edit-client').value.trim()   || currentProject.client;
-  currentProject.typology = document.getElementById('edit-typology').value.trim() || currentProject.typology;
-  currentProject.notes    = document.getElementById('edit-notes').value;
+  currentProject.projectCode = document.getElementById('edit-project-code').value.trim();
+  currentProject.name        = document.getElementById('edit-name').value.trim()     || currentProject.name;
+  currentProject.client      = document.getElementById('edit-client').value.trim()   || currentProject.client;
+  currentProject.typology    = document.getElementById('edit-typology').value.trim() || currentProject.typology;
+  currentProject.notes       = document.getElementById('edit-notes').value;
   currentProject.benchmark = document.getElementById('benchmark').value;
   currentProject.employees = parseFloat(document.getElementById('employees').value) || 0;
   currentProject.gfaPerEmp = parseFloat(document.getElementById('gfaPerEmp').value) || 0;

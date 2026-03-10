@@ -161,6 +161,10 @@
                     <div class="overview-panel">
                         <h3>Project Information</h3>
                         <div class="control-group">
+                            <label>Project Number</label>
+                            <input type="text" id="edit-project-code" placeholder="e.g. 586" onchange="saveCurrentProject()">
+                        </div>
+                        <div class="control-group">
                             <label>Project Name</label>
                             <input type="text" id="edit-name" placeholder="e.g. NEOM AI Campus" onchange="saveCurrentProject()">
                         </div>
@@ -372,6 +376,10 @@
 <div id="modal-overlay" class="modal-overlay" onclick="if(event.target===this)closeModal()">
     <div class="modal">
         <h2>New Project</h2>
+        <div class="control-group">
+            <label>Project Number</label>
+            <input type="text" id="modal-project-code" placeholder="e.g. 586">
+        </div>
         <div class="control-group">
             <label>Project Name</label>
             <input type="text" id="modal-project-name" placeholder="e.g. Dubai Cultural Quarter">
