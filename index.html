@@ -48,6 +48,14 @@
                 <p>Shape visionary environments. Configure the spatial backbone of your next architectural masterplan and deploy vibrant, data-driven catalogs into the third dimension.</p>
             </div>
 
+            <!-- Search bar -->
+            <div class="search-bar-wrapper">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="search-icon">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input type="text" class="search-input" placeholder="Search by name, client or typology…" oninput="filterDashboard(this.value)">
+            </div>
+
             <div class="projects-grid" id="projects-grid">
                 <!-- New Project Card (always first) -->
                 <div class="new-project-card" onclick="openNewProjectModal()">
@@ -74,6 +82,9 @@
                 <span class="current" id="breadcrumb-project-name">Project</span>
             </div>
             <div class="editor-actions">
+                <!-- Save status indicator -->
+                <span id="save-status" class="save-status idle"></span>
+
                 <button id="editor-btn-ppt" class="btn btn-ghost" style="display:none;" onclick="exportPPT()">
                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 9v2.5a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><polyline points="4.5 5.5 7 8 9.5 5.5"/><line x1="7" y1="8" x2="7" y2="1.5"/></svg>
                     Export PPT
@@ -104,6 +115,7 @@
             <div id="tab-panel-overview" class="tab-panel active">
                 <div class="section-title">Project Details</div>
 
+                <!-- KPI Cards -->
                 <div class="kpi-grid" style="margin-bottom: var(--space-xl);">
                     <div class="kpi-card">
                         <div class="kpi-label">Total Campus GFA <span class="info-dot" data-tooltip="Aggregate Gross Floor Area for the entire project">i</span></div>
@@ -117,8 +129,25 @@
                         <div class="kpi-label">GFA / Employee <span class="info-dot" data-tooltip="Gross Floor Area allocated per person">i</span></div>
                         <div class="kpi-value" id="kpi-gfa-emp" style="color: var(--accent-emerald);">0<span class="kpi-unit">m²</span></div>
                     </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Floor Area Ratio <span class="info-dot" data-tooltip="Total GFA ÷ Site Area — key planning regulation. Set Site Area below.">i</span></div>
+                        <div class="kpi-value" id="kpi-far" style="color: var(--accent-amber);">—</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Site Coverage <span class="info-dot" data-tooltip="Building footprint ÷ Site Area. Requires site area and 3D catalog dimensions.">i</span></div>
+                        <div class="kpi-value" id="kpi-scr" style="color: var(--accent-coral);">—</div>
+                    </div>
                 </div>
 
+                <!-- Benchmark Comparison Chart -->
+                <div class="overview-panel benchmark-comparison-panel">
+                    <h3>GFA / Employee — Benchmark Comparison</h3>
+                    <div style="height: 190px; position: relative;">
+                        <canvas id="benchmarkChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Project Info + Quick Config -->
                 <div class="overview-grid">
                     <div class="overview-panel">
                         <h3>Project Information</h3>
@@ -157,6 +186,18 @@
                             <label>GFA per Employee (m²) <span class="info-dot" data-tooltip="Standard space multiplier. Impacts total GFA.">i</span></label>
                             <input type="number" id="gfaPerEmp" value="25" oninput="calculate()">
                         </div>
+                        <div class="control-group">
+                            <label>Site Area (m²) <span class="info-dot" data-tooltip="Total site area used to calculate FAR and Site Coverage Ratio">i</span></label>
+                            <input type="number" id="siteArea" value="0" oninput="calculate()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Project Notes -->
+                <div class="notes-section">
+                    <div class="section-title" style="margin-top: var(--space-xl);">Project Notes</div>
+                    <div class="overview-panel">
+                        <textarea id="edit-notes" placeholder="Document client requirements, planning constraints, design decisions, phasing notes…" onchange="saveCurrentProject()"></textarea>
                     </div>
                 </div>
             </div>
@@ -171,8 +212,9 @@
                                 <thead>
                                     <tr>
                                         <th>Program Type</th>
-                                        <th style="display:flex; align-items:center; gap:6px;">Share (%) <span class="info-dot" data-tooltip="Total must equal 100%">i</span></th>
+                                        <th style="display:flex; align-items:center; gap:6px;">Share (%) <span class="info-dot" data-tooltip="Total must equal 100%. Lock icon pins a share.">i</span></th>
                                         <th>Required Area (m²)</th>
+                                        <th style="width:72px; text-align:center;">Lock / Del</th>
                                     </tr>
                                 </thead>
                                 <tbody id="program-table-body">
@@ -183,6 +225,7 @@
                                         <th>Total Allocation <span class="info-dot" data-tooltip="Check to ensure all percentages add up">i</span></th>
                                         <th id="total-pct" style="font-weight: 700;">100%</th>
                                         <th id="total-area-check">0</th>
+                                        <th></th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -208,7 +251,7 @@
             <div id="tab-panel-3d" class="tab-panel">
                 <div class="form-grid">
                     <div>
-                        <div class="section-title">Module Dimensions (L × W × H)</div>
+                        <div class="section-title">Module Dimensions (L × W × H × Floors)</div>
                         <div class="data-table-wrapper">
                             <table class="data-table">
                                 <thead>
@@ -217,8 +260,9 @@
                                         <th>Target GFA</th>
                                         <th>L (m)</th>
                                         <th>W (m)</th>
-                                        <th style="display:flex; align-items:center; gap:6px;">H (m) <span class="info-dot" data-tooltip="Standard floor or total height">i</span></th>
-                                        <th>Boxes <span class="info-dot" data-tooltip="Quantity generated in 3D scene">i</span></th>
+                                        <th>H (m) <span class="info-dot" data-tooltip="Floor-to-floor height per storey">i</span></th>
+                                        <th>Floors <span class="info-dot" data-tooltip="Number of storeys per building unit">i</span></th>
+                                        <th>Units <span class="info-dot" data-tooltip="Number of building units generated in 3D scene">i</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="catalog-table-body">
@@ -230,7 +274,17 @@
 
                     <div>
                         <div class="section-title">Live 3D Preview</div>
-                        <div class="viewport-3d" id="canvas-3d"></div>
+                        <div class="viewport-3d" id="canvas-3d">
+                            <!-- Camera preset + screenshot controls overlay -->
+                            <div class="viewport-controls">
+                                <button class="viewport-btn" onclick="setCameraPreset('top')" title="Top view">Top</button>
+                                <button class="viewport-btn" onclick="setCameraPreset('front')" title="Front view">Front</button>
+                                <button class="viewport-btn" onclick="setCameraPreset('iso')" title="Isometric view">Iso</button>
+                                <button class="viewport-btn viewport-btn-icon" onclick="screenshot3D()" title="Save PNG screenshot">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -238,17 +292,19 @@
             <!-- ─── Tab 3: Export ─── -->
             <div id="tab-panel-export" class="tab-panel">
                 <div class="section-title">Export Options</div>
-                <div class="overview-grid">
-                    <div class="overview-panel" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; gap:var(--space-lg); text-align:center;">
-                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="var(--accent-coral)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
+                <div class="export-grid">
+
+                    <!-- PowerPoint -->
+                    <div class="overview-panel export-panel">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="var(--accent-coral)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
                             <rect x="8" y="6" width="32" height="36" rx="3"/>
                             <line x1="16" y1="16" x2="32" y2="16"/>
                             <line x1="16" y1="22" x2="28" y2="22"/>
                             <line x1="16" y1="28" x2="24" y2="28"/>
                         </svg>
-                        <div>
-                            <h3 style="font-size:16px; margin-bottom:6px;">Export to PowerPoint</h3>
-                            <p style="font-size:13px; color:var(--text-secondary); max-width:280px;">Generate a branded PPTX slide with your spatial program summary, doughnut chart, and data table.</p>
+                        <div class="export-panel-info">
+                            <h3>Export to PowerPoint</h3>
+                            <p>Generate a 3-slide branded PPTX: program summary with doughnut chart, 3D catalog table, and benchmark comparison.</p>
                         </div>
                         <button class="btn btn-primary" onclick="exportPPT()">
                             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 9v2.5a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><polyline points="4.5 5.5 7 8 9.5 5.5"/><line x1="7" y1="8" x2="7" y2="1.5"/></svg>
@@ -256,22 +312,43 @@
                         </button>
                     </div>
 
-                    <div class="overview-panel" style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:200px; gap:var(--space-lg); text-align:center;">
-                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="var(--accent-emerald)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
+                    <!-- 3D OBJ -->
+                    <div class="overview-panel export-panel">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="var(--accent-emerald)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
                             <path d="M24 6L40 16V32L24 42L8 32V16L24 6Z"/>
                             <line x1="24" y1="42" x2="24" y2="22"/>
                             <line x1="8" y1="16" x2="24" y2="22"/>
                             <line x1="40" y1="16" x2="24" y2="22"/>
                         </svg>
-                        <div>
-                            <h3 style="font-size:16px; margin-bottom:6px;">Export 3D Model (OBJ)</h3>
-                            <p style="font-size:13px; color:var(--text-secondary); max-width:280px;">Download an OBJ file of the 3D module catalog for use in Rhino, SketchUp, Blender, or other 3D tools.</p>
+                        <div class="export-panel-info">
+                            <h3>Export 3D Model (OBJ)</h3>
+                            <p>Download an OBJ file of the 3D module catalog for Rhino, SketchUp, Blender, or other 3D tools.</p>
                         </div>
                         <button class="btn btn-success" onclick="switchEditorTab(2); setTimeout(()=>{ update3D(); setTimeout(exportOBJ, 500); }, 200);">
                             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 9v2.5a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><polyline points="4.5 5.5 7 8 9.5 5.5"/><line x1="7" y1="8" x2="7" y2="1.5"/></svg>
                             Download OBJ
                         </button>
                     </div>
+
+                    <!-- CSV -->
+                    <div class="overview-panel export-panel">
+                        <svg width="44" height="44" viewBox="0 0 48 48" fill="none" stroke="var(--accent-blue)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7">
+                            <rect x="8" y="6" width="32" height="36" rx="3"/>
+                            <line x1="16" y1="18" x2="32" y2="18"/>
+                            <line x1="16" y1="24" x2="32" y2="24"/>
+                            <line x1="16" y1="30" x2="32" y2="30"/>
+                            <line x1="24" y1="6" x2="24" y2="42"/>
+                        </svg>
+                        <div class="export-panel-info">
+                            <h3>Export to CSV</h3>
+                            <p>Download a spreadsheet with all program data — program areas, dimensions, floor counts, and unit quantities for Excel, Revit schedules, or QS workflows.</p>
+                        </div>
+                        <button class="btn btn-ghost" onclick="exportCSV()">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 9v2.5a1 1 0 01-1 1H4a1 1 0 01-1-1V9"/><polyline points="4.5 5.5 7 8 9.5 5.5"/><line x1="7" y1="8" x2="7" y2="1.5"/></svg>
+                            Download CSV
+                        </button>
+                    </div>
+
                 </div>
             </div>
         </div>

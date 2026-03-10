@@ -4,24 +4,36 @@
 
 // ─── Project Migration ─────────────────────────────────────
 function migrateProject(p) {
-  if (p.programs) return p; // Already migrated
+  // Top-level new fields
+  if (p.siteArea === undefined) p.siteArea = 0;
+  if (p.notes === undefined) p.notes = '';
 
-  // Safe fallback if dims exist
+  if (p.programs) {
+    // Migrate program-level fields added in v2
+    p.programs.forEach(prog => {
+      if (prog.locked === undefined) prog.locked = false;
+      if (prog.nFloors === undefined) prog.nFloors = 1;
+    });
+    return p;
+  }
+
+  // Legacy format (pct/dims) → programs array
   const getDims = (key, defaultDims) => p.dims && p.dims[key] ? p.dims[key] : defaultDims;
   const getShare = (key, defaultShare) => p.pct && p.pct[key] !== undefined ? p.pct[key] : defaultShare;
 
   p.programs = [
-    { id: 'office', name: 'Offices / R&D', color: '#ff6b8a', share: getShare('office', 50), dims: getDims('office', { l: 20, w: 20, h: 4 }), isSurface: false },
-    { id: 'land', name: 'Landscape', color: '#34d399', share: getShare('land', 15), dims: null, isSurface: true },
-    { id: 'amenities', name: 'Amenities', color: '#fbbf24', share: getShare('amenities', 10), dims: getDims('amenities', { l: 15, w: 15, h: 5 }), isSurface: false },
-    { id: 'housing', name: 'Housing', color: '#fb923c', share: getShare('housing', 15), dims: getDims('housing', { l: 10, w: 6, h: 3.5 }), isSurface: false },
-    { id: 'mobility', name: 'Mobility', color: '#60a5fa', share: getShare('mobility', 7), dims: null, isSurface: true },
-    { id: 'infra', name: 'Infrastructure', color: '#a78bfa', share: getShare('infra', 3), dims: getDims('infra', { l: 10, w: 10, h: 5 }), isSurface: false }
+    { id: 'office',    name: 'Offices / R&D',  color: '#ff6b8a', share: getShare('office', 50),    dims: getDims('office',    { l: 20, w: 20, h: 4   }), isSurface: false, locked: false, nFloors: 1 },
+    { id: 'land',      name: 'Landscape',       color: '#34d399', share: getShare('land', 15),       dims: null,                                              isSurface: true,  locked: false, nFloors: 1 },
+    { id: 'amenities', name: 'Amenities',       color: '#fbbf24', share: getShare('amenities', 10),  dims: getDims('amenities', { l: 15, w: 15, h: 5   }), isSurface: false, locked: false, nFloors: 1 },
+    { id: 'housing',   name: 'Housing',         color: '#fb923c', share: getShare('housing', 15),    dims: getDims('housing',   { l: 10, w: 6,  h: 3.5 }), isSurface: false, locked: false, nFloors: 1 },
+    { id: 'mobility',  name: 'Mobility',        color: '#60a5fa', share: getShare('mobility', 7),    dims: null,                                              isSurface: true,  locked: false, nFloors: 1 },
+    { id: 'infra',     name: 'Infrastructure',  color: '#a78bfa', share: getShare('infra', 3),       dims: getDims('infra',     { l: 10, w: 10, h: 5   }), isSurface: false, locked: false, nFloors: 1 }
   ];
   delete p.pct;
   delete p.dims;
   return p;
 }
+
 
 // ─── Project Store ─────────────────────────────────────────
 const Store = {
@@ -87,7 +99,6 @@ const Store = {
       try { return JSON.parse(raw).map(migrateProject); }
       catch { /* fall through */ }
     }
-    // First time — seed defaults
     const defaultsMigrated = this.defaults.map(migrateProject);
     this.save(defaultsMigrated);
     return [...defaultsMigrated];
@@ -131,30 +142,38 @@ const benchmarks = {
   nvidia:    { gfaPerEmp: 23.2, pct: [65, 15, 10, 0, 7, 3] }
 };
 
-const pctKeys = ['office', 'land', 'amenities', 'housing', 'mobility', 'infra'];
-const programColors = ['#ff6b8a', '#34d399', '#fbbf24', '#fb923c', '#60a5fa', '#a78bfa'];
-const programLabels = ['Offices / R&D', 'Landscape', 'Amenities', 'Housing', 'Mobility', 'Infrastructure'];
-
-// Color map for hex usage in 3D
-const colorHex3D = {
-  office: 0xff6b8a,
-  amenities: 0xfbbf24,
-  housing: 0xfb923c,
-  infra: 0xa78bfa,
-  land: 0x34d399,
-  mobility: 0x60a5fa
+const benchmarkNames = {
+  custom: 'Custom', apple: 'Apple Park', microsoft: 'Microsoft Redmond',
+  google: 'Googleplex', meta: 'Meta Menlo Park', nvidia: 'Nvidia Campus'
 };
+
+// Curated DMAA color palette for new program types
+const dmaaColorPalette = [
+  '#ff6b8a', '#34d399', '#fbbf24', '#fb923c', '#60a5fa', '#a78bfa',
+  '#00d4ff', '#ff6b6b', '#f472b6', '#4ade80', '#e879f9', '#f97316'
+];
 
 
 // ─── Application State ─────────────────────────────────────
-let currentView = 'dashboard';  // 'dashboard' | 'editor'
+let currentView = 'dashboard';
 let currentProject = null;
 let chartInstance = null;
-let computedGFA = { office: 0, land: 0, amenities: 0, housing: 0, mobility: 0, infra: 0 };
+let benchmarkChartInstance = null;
+let computedGFA = {};
+let lastZOffset = 0;
 
 // 3D state
 let scene3d, camera3d, renderer3d, controls3d, exporter;
 let meshesGroup;
+
+// Drag-to-reorder state
+let dragSrcId = null;
+
+// Dashboard search state
+let dashboardSearchQuery = '';
+
+// Save status debounce
+let saveStatusTimer = null;
 
 
 // ─── Router ────────────────────────────────────────────────
@@ -166,10 +185,7 @@ function showView(viewName) {
 }
 
 function goToDashboard() {
-  // Save current project if editing
-  if (currentProject) {
-    saveCurrentProject();
-  }
+  if (currentProject) saveCurrentProject();
   currentProject = null;
   showView('dashboard');
   renderDashboard();
@@ -186,40 +202,52 @@ function goToDashboard() {
     camera3d = null;
     controls3d = null;
   }
+
+  // Destroy benchmark chart
+  if (benchmarkChartInstance) {
+    benchmarkChartInstance.destroy();
+    benchmarkChartInstance = null;
+  }
+
+  // Destroy main chart
+  if (chartInstance) {
+    chartInstance.destroy();
+    chartInstance = null;
+  }
 }
 
 function openProject(projectId) {
   const project = Store.get(projectId);
   if (!project) return;
-  currentProject = JSON.parse(JSON.stringify(project)); // deep clone
+  currentProject = JSON.parse(JSON.stringify(project));
   showView('editor');
   initEditor();
 }
 
 function createNewProject() {
-  const nameInput = document.getElementById('modal-project-name');
-  const clientInput = document.getElementById('modal-project-client');
+  const nameInput     = document.getElementById('modal-project-name');
+  const clientInput   = document.getElementById('modal-project-client');
   const typologyInput = document.getElementById('modal-project-typology');
 
-  const name = nameInput.value.trim() || 'Untitled Project';
-  const client = clientInput.value.trim() || 'Client TBD';
+  const name     = nameInput.value.trim()     || 'Untitled Project';
+  const client   = clientInput.value.trim()   || 'Client TBD';
   const typology = typologyInput.value.trim() || 'Mixed-Use';
 
   const newProject = {
     id: 'proj-' + Date.now(),
-    name,
-    client,
-    typology,
+    name, client, typology,
     employees: 5000,
     gfaPerEmp: 25,
     benchmark: 'custom',
+    siteArea: 0,
+    notes: '',
     programs: [
-      { id: 'office', name: 'Offices / R&D', color: '#ff6b8a', share: 50, dims: { l: 20, w: 20, h: 4 }, isSurface: false },
-      { id: 'land', name: 'Landscape', color: '#34d399', share: 15, dims: null, isSurface: true },
-      { id: 'amenities', name: 'Amenities', color: '#fbbf24', share: 10, dims: { l: 15, w: 15, h: 5 }, isSurface: false },
-      { id: 'housing', name: 'Housing', color: '#fb923c', share: 15, dims: { l: 10, w: 6, h: 3.5 }, isSurface: false },
-      { id: 'mobility', name: 'Mobility', color: '#60a5fa', share: 7, dims: null, isSurface: true },
-      { id: 'infra', name: 'Infrastructure', color: '#a78bfa', share: 3, dims: { l: 10, w: 10, h: 5 }, isSurface: false }
+      { id: 'office',    name: 'Offices / R&D',  color: '#ff6b8a', share: 50, dims: { l: 20, w: 20, h: 4   }, isSurface: false, locked: false, nFloors: 1 },
+      { id: 'land',      name: 'Landscape',       color: '#34d399', share: 15, dims: null,                      isSurface: true,  locked: false, nFloors: 1 },
+      { id: 'amenities', name: 'Amenities',       color: '#fbbf24', share: 10, dims: { l: 15, w: 15, h: 5   }, isSurface: false, locked: false, nFloors: 1 },
+      { id: 'housing',   name: 'Housing',         color: '#fb923c', share: 15, dims: { l: 10, w: 6,  h: 3.5 }, isSurface: false, locked: false, nFloors: 1 },
+      { id: 'mobility',  name: 'Mobility',        color: '#60a5fa', share: 7,  dims: null,                      isSurface: true,  locked: false, nFloors: 1 },
+      { id: 'infra',     name: 'Infrastructure',  color: '#a78bfa', share: 3,  dims: { l: 10, w: 10, h: 5   }, isSurface: false, locked: false, nFloors: 1 }
     ],
     createdAt: new Date().toISOString().split('T')[0]
   };
@@ -229,18 +257,45 @@ function createNewProject() {
   openProject(newProject.id);
 }
 
+function duplicateProject(id) {
+  const original = Store.get(id);
+  if (!original) return;
+  const copy = JSON.parse(JSON.stringify(original));
+  copy.id = 'proj-' + Date.now();
+  copy.name = original.name + ' (Copy)';
+  copy.createdAt = new Date().toISOString().split('T')[0];
+  Store.add(copy);
+  renderDashboard();
+}
+
 
 // ─── Dashboard ─────────────────────────────────────────────
 function renderDashboard() {
   const grid = document.getElementById('projects-grid');
-  const projects = Store.load();
+  let projects = Store.load();
 
-  // New project card is already in HTML, remove dynamic project cards
-  const existingCards = grid.querySelectorAll('.project-card');
-  existingCards.forEach(c => c.remove());
+  // Apply search filter
+  const query = dashboardSearchQuery.toLowerCase();
+  if (query) {
+    projects = projects.filter(p =>
+      p.name.toLowerCase().includes(query) ||
+      p.client.toLowerCase().includes(query) ||
+      p.typology.toLowerCase().includes(query)
+    );
+  }
+
+  // Remove old project cards (keep the static new-project-card)
+  grid.querySelectorAll('.project-card').forEach(c => c.remove());
 
   projects.forEach((proj, idx) => {
     const totalGFA = proj.employees * proj.gfaPerEmp;
+
+    // Program bar segments
+    const programBar = (proj.programs || [])
+      .filter(p => p.share > 0)
+      .map(p => `<div style="flex:${p.share}; background:${p.color};" title="${escapeHtml(p.name)}: ${p.share}%"></div>`)
+      .join('');
+
     const card = document.createElement('div');
     card.className = 'project-card';
     card.style.animationDelay = `${0.15 + idx * 0.1}s`;
@@ -261,8 +316,10 @@ function renderDashboard() {
           </div>
         </div>
       </div>
+      <div class="program-bar">${programBar}</div>
       <div class="project-card-actions">
         <button class="btn btn-ghost" style="font-size:12px; padding:6px 14px;" onclick="event.stopPropagation(); openProject('${proj.id}')">Open</button>
+        <button class="btn btn-ghost" style="font-size:12px; padding:6px 14px;" onclick="event.stopPropagation(); duplicateProject('${proj.id}')">Duplicate</button>
         <button class="btn btn-danger" style="font-size:12px; padding:6px 14px;" onclick="event.stopPropagation(); deleteProject('${proj.id}')">Delete</button>
       </div>
     `;
@@ -275,6 +332,11 @@ function deleteProject(id) {
     Store.remove(id);
     renderDashboard();
   }
+}
+
+function filterDashboard(query) {
+  dashboardSearchQuery = query;
+  renderDashboard();
 }
 
 
@@ -293,79 +355,94 @@ function closeModal() {
 
 
 // ─── Editor ────────────────────────────────────────────────
-let editorTabIndex = 0;  // 0=Overview, 1=Master Program, 2=3D Catalog, 3=Export
+let editorTabIndex = 0;
 
 function initEditor() {
   if (!currentProject) return;
 
-  // Update breadcrumb
   document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
-
-  // Populate overview fields
-  document.getElementById('edit-name').value = currentProject.name;
-  document.getElementById('edit-client').value = currentProject.client;
-  document.getElementById('edit-typology').value = currentProject.typology;
-
-  // Populate master program fields
-  document.getElementById('benchmark').value = currentProject.benchmark;
-  document.getElementById('employees').value = currentProject.employees;
-  document.getElementById('gfaPerEmp').value = currentProject.gfaPerEmp;
+  document.getElementById('edit-name').value      = currentProject.name;
+  document.getElementById('edit-client').value    = currentProject.client;
+  document.getElementById('edit-typology').value  = currentProject.typology;
+  document.getElementById('edit-notes').value     = currentProject.notes || '';
+  document.getElementById('benchmark').value      = currentProject.benchmark;
+  document.getElementById('employees').value      = currentProject.employees;
+  document.getElementById('gfaPerEmp').value      = currentProject.gfaPerEmp;
+  document.getElementById('siteArea').value       = currentProject.siteArea || 0;
 
   renderProgramTable();
   renderCatalogTable();
-
-  // Reset to first tab
   switchEditorTab(0);
 
-  // Init chart if needed
-  if (!chartInstance) {
-    initChart();
-  }
-
-  // Calculate
+  if (!chartInstance) initChart();
   calculate();
 }
 
 function switchEditorTab(idx) {
   editorTabIndex = idx;
-  document.querySelectorAll('.editor-tab').forEach((btn, i) => {
-    btn.classList.toggle('active', i === idx);
-  });
-  document.querySelectorAll('.tab-panel').forEach((panel, i) => {
-    panel.classList.toggle('active', i === idx);
-  });
+  document.querySelectorAll('.editor-tab').forEach((btn, i) => btn.classList.toggle('active', i === idx));
+  document.querySelectorAll('.tab-panel').forEach((panel, i) => panel.classList.toggle('active', i === idx));
 
-  // Update action buttons visibility
   document.getElementById('editor-btn-ppt').style.display = (idx === 1) ? 'inline-flex' : 'none';
   document.getElementById('editor-btn-obj').style.display = (idx === 2) ? 'inline-flex' : 'none';
 
   if (idx === 2) {
     setTimeout(() => {
-      if (!scene3d) {
-        init3D();
-      } else {
-        resize3D();
-      }
+      if (!scene3d) init3D(); else resize3D();
       update3D();
     }, 60);
   }
 }
+
+
+// ─── Save Status ───────────────────────────────────────────
+function showSaveStatus(state) {
+  const el = document.getElementById('save-status');
+  if (!el) return;
+  clearTimeout(saveStatusTimer);
+  if (state === 'saving') {
+    el.textContent = 'Saving…';
+    el.className = 'save-status saving';
+  } else if (state === 'saved') {
+    const now = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    el.textContent = `Saved ${now}`;
+    el.className = 'save-status saved';
+    saveStatusTimer = setTimeout(() => { el.className = 'save-status idle'; }, 3000);
+  } else if (state === 'error') {
+    el.textContent = 'Save failed';
+    el.className = 'save-status error';
+  }
+}
+
 
 // ─── Dynamic Renders & Handlers ────────────────────────────
 function renderProgramTable() {
   const tbody = document.getElementById('program-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
-  
+
   currentProject.programs.forEach(prog => {
     const tr = document.createElement('tr');
+    if (prog.locked) tr.classList.add('program-row-locked');
+    tr.setAttribute('data-prog-id', prog.id);
+    tr.setAttribute('draggable', 'true');
+
+    const lockSvg = prog.locked
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18 10H6V7a6 6 0 1112 0v3zM6 12h12v10H6z"/></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>`;
+
+    const surfaceLabel = prog.isSurface ? 'Surface' : 'Volume';
+    const surfaceTip   = prog.isSurface ? 'Switch to Volume (3D box)' : 'Switch to Surface (flat)';
+
     tr.innerHTML = `
       <td>
-        <div style="display:flex; align-items:center;">
-          <div class="color-picker-wrapper" style="background-color: ${prog.color};">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="drag-handle" title="Drag to reorder">⠿</span>
+          <div class="color-picker-wrapper" style="background-color: ${prog.color};" title="Change colour">
             <input type="color" value="${prog.color}" class="color-picker" onchange="updateProgramColor('${prog.id}', this.value)">
           </div>
           <input type="text" value="${escapeHtml(prog.name)}" class="table-input text-input" onchange="updateProgramName('${prog.id}', this.value)">
+          <button class="btn-surface-toggle ${prog.isSurface ? 'is-surface' : ''}" onclick="toggleProgramSurface('${prog.id}')" title="${surfaceTip}">${surfaceLabel}</button>
         </div>
       </td>
       <td>
@@ -375,12 +452,45 @@ function renderProgramTable() {
         </div>
       </td>
       <td id="area-${prog.id}" class="area-value">0 <span class="unit-text">m²</span></td>
-      <td style="width:50px; text-align:center;">
-        <button class="btn-icon danger-icon" onclick="removeProgramType('${prog.id}')" title="Remove Program">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      <td style="width:72px; text-align:center; white-space:nowrap;">
+        <button class="btn-icon lock-btn ${prog.locked ? 'locked' : ''}" onclick="toggleProgramLock('${prog.id}')" title="${prog.locked ? 'Unlock share' : 'Lock share'}">
+          ${lockSvg}
+        </button>
+        <button class="btn-icon danger-icon" onclick="removeProgramType('${prog.id}')" title="Remove program" style="margin-left:4px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </td>
     `;
+
+    // Drag-to-reorder events
+    tr.addEventListener('dragstart', e => {
+      dragSrcId = prog.id;
+      tr.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    tr.addEventListener('dragend', () => {
+      tr.classList.remove('dragging');
+      document.querySelectorAll('#program-table-body tr').forEach(r => r.classList.remove('drag-over'));
+    });
+    tr.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('#program-table-body tr').forEach(r => r.classList.remove('drag-over'));
+      tr.classList.add('drag-over');
+    });
+    tr.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrcId === prog.id) return;
+      const srcIdx = currentProject.programs.findIndex(p => p.id === dragSrcId);
+      const dstIdx = currentProject.programs.findIndex(p => p.id === prog.id);
+      if (srcIdx < 0 || dstIdx < 0) return;
+      const [moved] = currentProject.programs.splice(srcIdx, 1);
+      currentProject.programs.splice(dstIdx, 0, moved);
+      renderProgramTable();
+      renderCatalogTable();
+      calculate();
+    });
+
     tbody.appendChild(tr);
   });
 }
@@ -393,14 +503,15 @@ function renderCatalogTable() {
   currentProject.programs.forEach(prog => {
     const tr = document.createElement('tr');
     let dimsMarkup = '';
-    
+
     if (prog.isSurface) {
       dimsMarkup = `
-        <td colspan="3" style="text-align:center; color:var(--text-muted); font-size:13px; font-weight:500; font-style:italic;">Surface Area (N/A)</td>
+        <td colspan="4" style="text-align:center; color:var(--text-muted); font-size:13px; font-weight:500; font-style:italic;">Surface Area (N/A)</td>
         <td><div class="badge-surface">1 surface</div></td>
       `;
     } else {
-      const d = prog.dims || {l:10, w:10, h:4};
+      const d        = prog.dims   || { l: 10, w: 10, h: 4 };
+      const nFloors  = prog.nFloors || 1;
       dimsMarkup = `
         <td>
           <div class="input-with-suffix">
@@ -418,6 +529,12 @@ function renderCatalogTable() {
           <div class="input-with-suffix">
             <input type="number" class="table-input num-input dim-val" value="${d.h}" onchange="updateProgramDim('${prog.id}', 'h', this.value)" min="1">
             <span class="suffix">m</span>
+          </div>
+        </td>
+        <td>
+          <div class="input-with-suffix">
+            <input type="number" class="table-input num-input dim-val" value="${nFloors}" onchange="updateProgramDim('${prog.id}', 'nFloors', this.value)" min="1" max="200">
+            <span class="suffix">fl</span>
           </div>
         </td>
         <td><div id="box-count-${prog.id}" class="box-count-badge">0</div></td>
@@ -438,17 +555,37 @@ function renderCatalogTable() {
   });
 }
 
+function toggleProgramLock(id) {
+  const p = currentProject.programs.find(x => x.id === id);
+  if (p) p.locked = !p.locked;
+  renderProgramTable();
+  saveCurrentProject();
+}
+
+function toggleProgramSurface(id) {
+  const p = currentProject.programs.find(x => x.id === id);
+  if (!p) return;
+  p.isSurface = !p.isSurface;
+  if (p.isSurface) {
+    p.dims = null;
+  } else {
+    p.dims    = { l: 15, w: 15, h: 4 };
+    p.nFloors = 1;
+  }
+  renderProgramTable();
+  renderCatalogTable();
+  update3D();
+  saveCurrentProject();
+}
+
 function addCustomProgramType() {
   if (!currentProject) return;
   const newId = 'prog-' + Date.now();
-  const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+  const randomColor = dmaaColorPalette[Math.floor(Math.random() * dmaaColorPalette.length)];
   currentProject.programs.push({
-    id: newId,
-    name: 'New Program',
-    color: randomColor,
-    share: 0,
-    dims: { l: 15, w: 15, h: 4 },
-    isSurface: false
+    id: newId, name: 'New Program', color: randomColor,
+    share: 0, dims: { l: 15, w: 15, h: 4 },
+    isSurface: false, locked: false, nFloors: 1
   });
   renderProgramTable();
   renderCatalogTable();
@@ -467,7 +604,7 @@ function updateProgramName(id, val) {
   const p = currentProject.programs.find(x => x.id === id);
   if (p) p.name = val;
   renderCatalogTable();
-  if(chartInstance) calculate(); 
+  if (chartInstance) calculate();
   saveCurrentProject();
 }
 
@@ -475,7 +612,7 @@ function updateProgramColor(id, val) {
   const p = currentProject.programs.find(x => x.id === id);
   if (p) p.color = val;
   renderCatalogTable();
-  if(chartInstance) calculate(); 
+  if (chartInstance) calculate();
   saveCurrentProject();
 }
 
@@ -487,91 +624,84 @@ function updateProgramShare(id, val) {
 
 function updateProgramDim(id, axis, val) {
   const p = currentProject.programs.find(x => x.id === id);
-  if (p && p.dims) p.dims[axis] = parseFloat(val) || 10;
+  if (!p) return;
+  if (axis === 'nFloors') {
+    p.nFloors = Math.max(1, Math.round(parseFloat(val) || 1));
+  } else if (p.dims) {
+    p.dims[axis] = parseFloat(val) || 10;
+  }
   update3D();
   saveCurrentProject();
 }
 
+
 // ─── Saving ────────────────────────────────────────────────
 function saveCurrentProject() {
   if (!currentProject) return;
+  showSaveStatus('saving');
 
-  // Read overview fields
-  currentProject.name = document.getElementById('edit-name').value.trim() || currentProject.name;
-  currentProject.client = document.getElementById('edit-client').value.trim() || currentProject.client;
+  currentProject.name     = document.getElementById('edit-name').value.trim()     || currentProject.name;
+  currentProject.client   = document.getElementById('edit-client').value.trim()   || currentProject.client;
   currentProject.typology = document.getElementById('edit-typology').value.trim() || currentProject.typology;
-
-  // Read parameters
+  currentProject.notes    = document.getElementById('edit-notes').value;
   currentProject.benchmark = document.getElementById('benchmark').value;
   currentProject.employees = parseFloat(document.getElementById('employees').value) || 0;
   currentProject.gfaPerEmp = parseFloat(document.getElementById('gfaPerEmp').value) || 0;
+  currentProject.siteArea  = parseFloat(document.getElementById('siteArea').value)  || 0;
 
+  // Keep breadcrumb in sync
+  document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
 
-
-  Store.update(currentProject);
+  try {
+    Store.update(currentProject);
+    showSaveStatus('saved');
+  } catch (e) {
+    showSaveStatus('error');
+    console.error('Save failed:', e);
+  }
 }
 
 
 // ─── Master Program Calculation ────────────────────────────
 function initChart() {
-  const ctx = document.getElementById('programChart').getContext('2d');
-  
+  const ctx    = document.getElementById('programChart').getContext('2d');
   const labels = currentProject.programs.map(p => p.name);
   const colors = currentProject.programs.map(p => p.color);
-  const data = currentProject.programs.map(p => p.share);
+  const data   = currentProject.programs.map(p => p.share);
 
   chartInstance = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: labels,
+      labels,
       datasets: [{
-        data: data,
-        backgroundColor: colors,
-        borderColor: 'rgba(10, 11, 16, 0.6)',
-        borderWidth: 3,
-        hoverBorderColor: 'rgba(255,255,255,0.3)',
-        hoverBorderWidth: 2
+        data, backgroundColor: colors,
+        borderColor: 'rgba(10, 11, 16, 0.6)', borderWidth: 3,
+        hoverBorderColor: 'rgba(255,255,255,0.3)', hoverBorderWidth: 2
       }]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: {
           position: 'right',
           labels: {
             color: 'rgba(241, 241, 244, 0.7)',
-            font: { family: "'Inter', sans-serif", size: 12, weight: 500 },
-            boxWidth: 12,
-            boxHeight: 12,
-            borderRadius: 3,
-            padding: 14,
-            usePointStyle: true,
-            pointStyle: 'rectRounded'
+            font: { family: "'Diatype', sans-serif", size: 12, weight: 500 },
+            boxWidth: 12, boxHeight: 12, borderRadius: 3,
+            padding: 14, usePointStyle: true, pointStyle: 'rectRounded'
           }
         },
         tooltip: {
           backgroundColor: 'rgba(26, 27, 37, 0.95)',
-          titleColor: '#f1f1f4',
-          bodyColor: 'rgba(241, 241, 244, 0.8)',
-          borderColor: 'rgba(255,255,255,0.1)',
-          borderWidth: 1,
-          cornerRadius: 10,
-          padding: 12,
-          bodyFont: { family: "'Inter', sans-serif", weight: 500 },
-          callbacks: {
-            label: function(context) {
-              const val = context.parsed;
-              return ` ${context.label}: ${val}%`;
-            }
-          }
+          titleColor: '#f1f1f4', bodyColor: 'rgba(241, 241, 244, 0.8)',
+          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          cornerRadius: 10, padding: 12,
+          bodyFont: { family: "'Diatype', sans-serif", weight: 500 },
+          callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}%` }
         }
       },
       cutout: '68%',
-      animation: {
-        animateRotate: true,
-        duration: 700
-      }
+      animation: { animateRotate: true, duration: 700 }
     }
   });
 }
@@ -579,18 +709,16 @@ function initChart() {
 function loadBenchmark() {
   const data = benchmarks[document.getElementById('benchmark').value];
   document.getElementById('gfaPerEmp').value = data.gfaPerEmp.toFixed(1);
-  
+
   const standardIds = ['office', 'land', 'amenities', 'housing', 'mobility', 'infra'];
   standardIds.forEach((id, i) => {
     const p = currentProject.programs.find(prog => prog.id === id);
-    if(p) p.share = data.pct[i];
+    if (p && !p.locked) p.share = data.pct[i];
   });
-  
-  // Custom ones share = 0
   currentProject.programs.forEach(p => {
-    if(!standardIds.includes(p.id)) p.share = 0;
+    if (!standardIds.includes(p.id) && !p.locked) p.share = 0;
   });
-  
+
   renderProgramTable();
   calculate();
 }
@@ -598,12 +726,16 @@ function loadBenchmark() {
 function balancePercentages(changedId) {
   const changedProg = currentProject.programs.find(p => p.id === changedId);
   if (!changedProg) return;
-  
   changedProg.share = Math.max(0, Math.min(100, changedProg.share));
 
-  const others = currentProject.programs.filter(k => k.id !== changedId);
-  let otherTotal = others.reduce((sum, p) => sum + p.share, 0);
-  const remainder = 100 - changedProg.share;
+  // Only redistribute unlocked programs (excluding the one that changed)
+  const lockedOthersTotal = currentProject.programs
+    .filter(k => k.id !== changedId && k.locked)
+    .reduce((s, p) => s + p.share, 0);
+
+  const others    = currentProject.programs.filter(k => k.id !== changedId && !k.locked);
+  const remainder = 100 - changedProg.share - lockedOthersTotal;
+  let   otherTotal = others.reduce((sum, p) => sum + p.share, 0);
 
   if (otherTotal === 0 && remainder > 0) {
     if (others.length > 0) {
@@ -612,11 +744,10 @@ function balancePercentages(changedId) {
     }
   } else if (otherTotal > 0) {
     others.forEach(p => {
-      const newVal = (p.share / otherTotal) * remainder;
-      p.share = parseFloat(newVal.toFixed(1));
+      p.share = parseFloat(((p.share / otherTotal) * remainder).toFixed(1));
     });
   }
-  
+
   renderProgramTable();
   calculate();
 }
@@ -624,56 +755,129 @@ function balancePercentages(changedId) {
 function calculate() {
   if (!currentProject) return;
 
-  const emp = parseFloat(document.getElementById('employees').value) || 0;
+  const emp      = parseFloat(document.getElementById('employees').value) || 0;
   const gfaPerEmp = parseFloat(document.getElementById('gfaPerEmp').value) || 0;
-  const totalGFA = emp * gfaPerEmp;
+  const siteArea  = parseFloat(document.getElementById('siteArea').value)  || 0;
+  const totalGFA  = emp * gfaPerEmp;
 
-  // Update KPI displays
+  // KPI displays
   document.getElementById('kpi-total-gfa').textContent = totalGFA.toLocaleString('en-US');
   document.getElementById('kpi-employees').textContent = emp.toLocaleString('en-US');
-  document.getElementById('kpi-gfa-emp').textContent = gfaPerEmp.toFixed(1);
+  document.getElementById('kpi-gfa-emp').textContent   = gfaPerEmp.toFixed(1);
+
+  // FAR
+  const farEl = document.getElementById('kpi-far');
+  if (farEl) farEl.textContent = siteArea > 0 ? (totalGFA / siteArea).toFixed(2) : '—';
 
   let totalPct = 0;
-  currentProject.programs.forEach(p => totalPct += p.share);
+  let totalFootprint = 0;
+  computedGFA = {};
+
+  currentProject.programs.forEach(p => {
+    totalPct += p.share;
+    computedGFA[p.id] = Math.round(totalGFA * (p.share / 100));
+
+    const elTable = document.getElementById('area-' + p.id);
+    if (elTable) elTable.innerHTML = computedGFA[p.id].toLocaleString() + ' <span class="unit-text">m²</span>';
+
+    const el3D = document.getElementById('3d-gfa-' + p.id);
+    if (el3D) el3D.innerHTML = computedGFA[p.id].toLocaleString() + ' <span class="unit-text">m²</span>';
+
+    // Accumulate footprint for SCR
+    if (!p.isSurface && p.dims) {
+      const boxFloorArea = p.dims.l * p.dims.w;
+      const nFloors      = p.nFloors || 1;
+      const boxCount     = computedGFA[p.id] > 0 ? Math.ceil(computedGFA[p.id] / (boxFloorArea * nFloors)) : 0;
+      totalFootprint += boxCount * boxFloorArea;
+    }
+  });
+
   totalPct = Math.round(totalPct * 10) / 10;
+
+  // SCR
+  const scrEl = document.getElementById('kpi-scr');
+  if (scrEl) scrEl.textContent = siteArea > 0 ? (totalFootprint / siteArea * 100).toFixed(1) + '%' : '—';
 
   // Total allocation badge
   const totalPctEl = document.getElementById('total-pct');
   totalPctEl.textContent = totalPct + '%';
   totalPctEl.style.color = (totalPct >= 99.9 && totalPct <= 100.1) ? '#34d399' : '#ef4444';
 
-  // Computed GFA per program & Area Readouts
-  computedGFA = {};
-  currentProject.programs.forEach(p => {
-    computedGFA[p.id] = Math.round(totalGFA * (p.share / 100));
-    
-    // Update DOM cells if table is rendered
-    const elTable = document.getElementById('area-' + p.id);
-    if (elTable) elTable.innerHTML = computedGFA[p.id].toLocaleString() + ' <span class="unit-text">m²</span>';
-    
-    const el3D = document.getElementById('3d-gfa-' + p.id);
-    if (el3D) el3D.innerHTML = computedGFA[p.id].toLocaleString() + ' <span class="unit-text">m²</span>';
-  });
-
   const totalArea = Math.round(totalGFA * (totalPct / 100));
   const elTotalArea = document.getElementById('total-area-check');
   if (elTotalArea) elTotalArea.textContent = totalArea.toLocaleString();
 
-  // Update chart
+  // Chart update
   if (chartInstance) {
-    chartInstance.data.labels = currentProject.programs.map(p => p.name);
-    chartInstance.data.datasets[0].data = currentProject.programs.map(p => p.share);
-    chartInstance.data.datasets[0].backgroundColor = currentProject.programs.map(p => p.color);
+    chartInstance.data.labels                          = currentProject.programs.map(p => p.name);
+    chartInstance.data.datasets[0].data               = currentProject.programs.map(p => p.share);
+    chartInstance.data.datasets[0].backgroundColor    = currentProject.programs.map(p => p.color);
     chartInstance.update();
   }
 
-  // Update 3D if visible
-  if (document.getElementById('tab-panel-3d') && document.getElementById('tab-panel-3d').classList.contains('active')) {
-    update3D();
+  renderBenchmarkComparison();
+
+  if (document.getElementById('tab-panel-3d')?.classList.contains('active')) update3D();
+
+  saveCurrentProject();
+}
+
+
+// ─── Benchmark Comparison Chart ────────────────────────────
+function renderBenchmarkComparison() {
+  const canvas = document.getElementById('benchmarkChart');
+  if (!canvas) return;
+
+  const currentGFA = parseFloat(document.getElementById('gfaPerEmp').value) || 0;
+  const labels     = ['Apple Park', 'Microsoft', 'Google', 'Meta', 'Nvidia', 'This Project'];
+  const values     = [26.6, 29.5, 17.2, 30.0, 23.2, currentGFA];
+  const colors     = [
+    'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.2)',
+    'rgba(255,255,255,0.2)', 'rgba(255,255,255,0.2)',
+    'rgba(0, 212, 255, 0.7)'
+  ];
+
+  if (benchmarkChartInstance) {
+    benchmarkChartInstance.data.datasets[0].data            = values;
+    benchmarkChartInstance.data.datasets[0].backgroundColor = colors;
+    benchmarkChartInstance.update();
+    return;
   }
 
-  // Save auto
-  saveCurrentProject();
+  benchmarkChartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values, backgroundColor: colors,
+        borderColor: 'transparent', borderRadius: 5, borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(26, 27, 37, 0.95)',
+          titleColor: '#f1f1f4', bodyColor: 'rgba(241, 241, 244, 0.8)',
+          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          cornerRadius: 8, padding: 10,
+          callbacks: { label: ctx => ` ${ctx.parsed.x.toFixed(1)} m² / employee` }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: 'rgba(241,241,244,0.4)', font: { size: 11 }, callback: v => v + ' m²' }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: 'rgba(241,241,244,0.6)', font: { size: 12 } }
+        }
+      }
+    }
+  });
 }
 
 
@@ -688,7 +892,8 @@ function init3D() {
   camera3d = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 1, 10000);
   camera3d.position.set(150, 150, 200);
 
-  renderer3d = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // preserveDrawingBuffer needed for screenshot export
+  renderer3d = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer3d.setPixelRatio(window.devicePixelRatio);
   renderer3d.setSize(container.clientWidth, container.clientHeight);
   renderer3d.setClearColor(0x000000, 0);
@@ -715,7 +920,6 @@ function init3D() {
 
   scene3d.add(meshesGroup);
   exporter = new THREE.OBJExporter();
-
   animate3D();
 }
 
@@ -732,27 +936,22 @@ window.addEventListener('resize', resize3D);
 
 function animate3D() {
   requestAnimationFrame(animate3D);
-  if (controls3d) controls3d.update();
+  if (controls3d)  controls3d.update();
   if (renderer3d && scene3d && camera3d) renderer3d.render(scene3d, camera3d);
 }
 
 function addBoxesToScene(prog, gfa, startZ) {
   const groupLayer = new THREE.Group();
   groupLayer.name = 'Layer_' + prog.id;
-
   if (gfa <= 0) return 0;
 
   const mat = new THREE.MeshStandardMaterial({
-    color: prog.color,
-    roughness: 0.35,
-    metalness: 0.1,
-    transparent: true,
-    opacity: 0.85
+    color: prog.color, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.85
   });
 
   if (prog.isSurface) {
     const side = Math.sqrt(gfa);
-    const geo = new THREE.BoxGeometry(side, 0.5, side);
+    const geo  = new THREE.BoxGeometry(side, 0.5, side);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(side / 2, 0.25, startZ + side / 2);
     groupLayer.add(mesh);
@@ -760,34 +959,40 @@ function addBoxesToScene(prog, gfa, startZ) {
     return side + 15;
   }
 
-  const L = prog.dims && prog.dims.l ? prog.dims.l : 10;
-  const W = prog.dims && prog.dims.w ? prog.dims.w : 10;
-  const H = prog.dims && prog.dims.h ? prog.dims.h : 4;
+  const L       = prog.dims?.l || 10;
+  const W       = prog.dims?.w || 10;
+  const H       = prog.dims?.h || 4;
+  const nFloors = prog.nFloors || 1;
 
-  const boxArea = L * W;
-  const count = Math.ceil(gfa / boxArea);
+  // Box count: one unit = L × W footprint × nFloors storeys
+  const totalFloorArea = L * W * nFloors;
+  const count = Math.ceil(gfa / totalFloorArea);
 
   const boxCountEl = document.getElementById('box-count-' + prog.id);
   if (boxCountEl) boxCountEl.textContent = count.toLocaleString();
 
-  const geo = new THREE.BoxGeometry(L, H, W);
+  const geo     = new THREE.BoxGeometry(L, H, W);
   const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.1 });
   const spacing = 2;
-  const cols = Math.ceil(Math.sqrt(count));
-  let x = 0, z = 0;
-  let maxDepth = 0;
+  const cols    = Math.ceil(Math.sqrt(count));
+  let x = 0, z = 0, maxDepth = 0;
   const renderCount = Math.min(count, 1500);
 
   for (let i = 0; i < renderCount; i++) {
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(x * (L + spacing) + L / 2, H / 2, startZ + z * (W + spacing) + W / 2);
-    groupLayer.add(mesh);
+    const posX = x * (L + spacing) + L / 2;
+    const posZ = startZ + z * (W + spacing) + W / 2;
 
-    // Wireframe edges
-    const edges = new THREE.EdgesGeometry(geo);
-    const line = new THREE.LineSegments(edges, edgeMat);
-    line.position.copy(mesh.position);
-    groupLayer.add(line);
+    // Stack floors vertically
+    for (let f = 0; f < nFloors; f++) {
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(posX, H / 2 + f * H, posZ);
+      groupLayer.add(mesh);
+
+      const edges = new THREE.EdgesGeometry(geo);
+      const line  = new THREE.LineSegments(edges, edgeMat);
+      line.position.copy(mesh.position);
+      groupLayer.add(line);
+    }
 
     maxDepth = Math.max(maxDepth, z * (W + spacing) + W);
     x++;
@@ -800,19 +1005,47 @@ function addBoxesToScene(prog, gfa, startZ) {
 
 function update3D() {
   if (!scene3d || !meshesGroup) return;
-
-  while (meshesGroup.children.length > 0) {
-    meshesGroup.remove(meshesGroup.children[0]);
-  }
+  while (meshesGroup.children.length > 0) meshesGroup.remove(meshesGroup.children[0]);
 
   let zOffset = 0;
-
   currentProject.programs.forEach(prog => {
-    zOffset += addBoxesToScene(prog, computedGFA[prog.id], zOffset);
+    zOffset += addBoxesToScene(prog, computedGFA[prog.id] || 0, zOffset);
   });
 
-  if (zOffset > 0) camera3d.position.set(zOffset / 2, Math.max(zOffset / 2, 100), zOffset);
-  controls3d.target.set(zOffset / 4, 0, zOffset / 2);
+  lastZOffset = zOffset;
+  if (zOffset > 0) {
+    camera3d.position.set(zOffset / 2, Math.max(zOffset / 2, 100), zOffset);
+    controls3d.target.set(zOffset / 4, 0, zOffset / 2);
+  }
+}
+
+function setCameraPreset(view) {
+  if (!camera3d || !controls3d) return;
+  const z  = lastZOffset || 200;
+  const cx = z / 4;
+  const cz = z / 2;
+
+  if (view === 'top') {
+    camera3d.position.set(cx, z * 1.5, cz);
+    controls3d.target.set(cx, 0, cz);
+  } else if (view === 'front') {
+    camera3d.position.set(cx, z * 0.25, z * 1.8);
+    controls3d.target.set(cx, 0, cz);
+  } else if (view === 'iso') {
+    camera3d.position.set(z / 2, Math.max(z / 2, 100), z);
+    controls3d.target.set(z / 4, 0, z / 2);
+  }
+  controls3d.update();
+}
+
+function screenshot3D() {
+  if (!renderer3d || !scene3d || !camera3d) return;
+  renderer3d.render(scene3d, camera3d);
+  const dataURL = renderer3d.domElement.toDataURL('image/png');
+  const link = document.createElement('a');
+  link.href = dataURL;
+  link.download = `DMAA_${currentProject ? currentProject.name.replace(/\s+/g, '_') : 'Scene'}_3D.png`;
+  link.click();
 }
 
 
@@ -820,10 +1053,35 @@ function update3D() {
 function exportOBJ() {
   if (!exporter || !meshesGroup) return;
   const result = exporter.parse(meshesGroup);
-  const blob = new Blob([result], { type: 'text/plain' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  const blob   = new Blob([result], { type: 'text/plain' });
+  const link   = document.createElement('a');
+  link.href     = URL.createObjectURL(blob);
   link.download = `DMAA_${currentProject ? currentProject.name.replace(/\s+/g, '_') : 'Project'}_Catalog.obj`;
+  link.click();
+}
+
+function exportCSV() {
+  if (!currentProject) return;
+  const rows = [['Program', 'Share (%)', 'GFA (m²)', 'Length (m)', 'Width (m)', 'Height (m)', 'Floors', 'Box Count']];
+
+  currentProject.programs.forEach(p => {
+    const gfa = computedGFA[p.id] || 0;
+    if (p.isSurface) {
+      rows.push([p.name, p.share, gfa, 'Surface', 'Surface', 'Surface', 1, 1]);
+    } else {
+      const d        = p.dims || { l: 0, w: 0, h: 0 };
+      const nFloors  = p.nFloors || 1;
+      const footprint = d.l * d.w * nFloors;
+      const boxCount  = footprint > 0 ? Math.ceil(gfa / footprint) : 0;
+      rows.push([p.name, p.share, gfa, d.l, d.w, d.h, nFloors, boxCount]);
+    }
+  });
+
+  const csv  = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href     = URL.createObjectURL(blob);
+  link.download = `DMAA_${currentProject.name.replace(/\s+/g, '_')}_Program.csv`;
   link.click();
 }
 
@@ -831,68 +1089,128 @@ function exportPPT() {
   try {
     let pres = new PptxGenJS();
     pres.layout = 'LAYOUT_16x9';
-    let slide = pres.addSlide();
-    slide.background = { color: '0a0b10' };
+    const projName     = currentProject ? currentProject.name : 'Project';
+    const emp          = document.getElementById('employees').value;
+    const gfa          = document.getElementById('kpi-total-gfa').textContent;
+    const bSelect      = document.getElementById('benchmark');
+    const bStr         = bSelect.options[bSelect.selectedIndex].text;
+    const currentGFAPE = parseFloat(document.getElementById('gfaPerEmp').value) || 0;
 
-    // Glass panel effect
-    slide.addShape(pres.ShapeType.rect, {
+    // ── SLIDE 1: Program Summary ────────────────────────────
+    const slide1 = pres.addSlide();
+    slide1.background = { color: '0a0b10' };
+    slide1.addShape(pres.ShapeType.rect, {
       x: 0.25, y: 0.25, w: 9.5, h: 5.125,
       fill: { color: 'FFFFFF', transparency: 95 },
-      line: { color: 'FFFFFF', transparency: 80, pt: 1 },
-      rectRadius: 0.05
+      line: { color: 'FFFFFF', transparency: 80, pt: 1 }, rectRadius: 0.05
     });
-
-    const projName = currentProject ? currentProject.name : 'Project';
-    slide.addText(`DMAA — ${projName}`, {
-      x: 0.5, y: 0.4, w: 9.0, h: 0.4,
-      fontSize: 24, bold: true, color: 'FFFFFF', fontFace: 'Arial'
+    slide1.addText(`DMAA — ${projName}`, {
+      x: 0.5, y: 0.4, w: 9.0, h: 0.4, fontSize: 24, bold: true, color: 'FFFFFF', fontFace: 'Arial'
     });
+    slide1.addText([
+      { text: 'Benchmark:\n',         options: { fontSize: 11, color: 'AAAAAA' } },
+      { text: bStr + '\n\n',          options: { fontSize: 14, color: 'FFFFFF', bold: true } },
+      { text: 'Target Employees:\n',  options: { fontSize: 11, color: 'AAAAAA' } },
+      { text: emp + '\n\n',           options: { fontSize: 14, color: 'FFFFFF', bold: true } },
+      { text: 'Total Campus GFA:\n',  options: { fontSize: 11, color: 'AAAAAA' } },
+      { text: gfa + ' m²',            options: { fontSize: 20, color: '34D399', bold: true } }
+    ], { x: 0.5, y: 1.0, w: 3.5, h: 1.8, fontFace: 'Arial', valign: 'top' });
 
-    const emp = document.getElementById('employees').value;
-    const gfa = document.getElementById('kpi-total-gfa').textContent;
-    const bSelect = document.getElementById('benchmark');
-    const bStr = bSelect.options[bSelect.selectedIndex].text;
-
-    let paramText = [
-      { text: 'Benchmark:\n', options: { fontSize: 11, color: 'AAAAAA' } },
-      { text: bStr + '\n\n', options: { fontSize: 14, color: 'FFFFFF', bold: true } },
-      { text: 'Target Employees:\n', options: { fontSize: 11, color: 'AAAAAA' } },
-      { text: emp + '\n\n', options: { fontSize: 14, color: 'FFFFFF', bold: true } },
-      { text: 'Total Campus GFA:\n', options: { fontSize: 11, color: 'AAAAAA' } },
-      { text: gfa + ' m²', options: { fontSize: 20, color: '34D399', bold: true } }
-    ];
-    slide.addText(paramText, { x: 0.5, y: 1.0, w: 3.5, h: 1.8, fontFace: 'Arial', valign: 'top' });
-
-    let chartData = [{
+    const chartColors = currentProject.programs.map(p => p.color.replace('#', ''));
+    slide1.addChart(pres.ChartType.doughnut, [{
       name: 'Program',
       labels: currentProject.programs.map(p => p.name),
-      values: currentProject.programs.map(p => computedGFA[p.id])
-    }];
-    const chartColors = currentProject.programs.map(p => p.color.replace('#', ''));
-
-    slide.addChart(pres.ChartType.doughnut, chartData, {
+      values: currentProject.programs.map(p => computedGFA[p.id] || 0)
+    }], {
       x: 4.2, y: 0.4, w: 5.0, h: 2.5,
       showLegend: true, legendPos: 'r', doughnutHoleSize: 65,
-      chartColors: chartColors,
-      legendColor: 'FFFFFF', legendFontSize: 11,
+      chartColors, legendColor: 'FFFFFF', legendFontSize: 11,
       showValue: false, showPercent: true,
       dataLabels: { color: 'FFFFFF', fontSize: 10, position: 'outEnd' }
     });
-
-    let rows = [
-      [
-        { text: 'Program', options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
-        { text: 'Share (%)', options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
-        { text: 'GFA (m²)', options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } }
-      ]
-    ];
+    const rows1 = [[
+      { text: 'Program',   options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'Share (%)', options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'GFA (m²)', options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } }
+    ]];
     currentProject.programs.forEach(p => {
-      rows.push([p.name, p.share + '%', computedGFA[p.id].toLocaleString()]);
+      rows1.push([p.name, p.share + '%', (computedGFA[p.id] || 0).toLocaleString()]);
     });
-    slide.addTable(rows, {
+    slide1.addTable(rows1, {
       x: 0.5, y: 3.0, w: 9.0, colW: [4.0, 2.5, 2.5],
       border: { pt: 0.5, color: 'FFFFFF', transparency: 80 },
       fontSize: 12, color: 'FFFFFF', valign: 'middle'
+    });
+
+    // ── SLIDE 2: 3D Catalog ─────────────────────────────────
+    const slide2 = pres.addSlide();
+    slide2.background = { color: '0a0b10' };
+    slide2.addShape(pres.ShapeType.rect, {
+      x: 0.25, y: 0.25, w: 9.5, h: 5.125,
+      fill: { color: 'FFFFFF', transparency: 95 },
+      line: { color: 'FFFFFF', transparency: 80, pt: 1 }, rectRadius: 0.05
+    });
+    slide2.addText(`DMAA — ${projName}  |  3D Module Catalog`, {
+      x: 0.5, y: 0.4, w: 9.0, h: 0.4, fontSize: 20, bold: true, color: 'FFFFFF', fontFace: 'Arial'
+    });
+    const rows2 = [[
+      { text: 'Program',  options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'GFA (m²)', options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'L (m)',    options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'W (m)',    options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'H (m)',    options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'Floors',   options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'Units',    options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } }
+    ]];
+    currentProject.programs.forEach(p => {
+      const gfaVal = computedGFA[p.id] || 0;
+      if (p.isSurface) {
+        rows2.push([p.name, gfaVal.toLocaleString(), '—', '—', '—', '—', 'Surface']);
+      } else {
+        const d       = p.dims || { l: 0, w: 0, h: 0 };
+        const nFloors = p.nFloors || 1;
+        const footprint = d.l * d.w * nFloors;
+        const units     = footprint > 0 ? Math.ceil(gfaVal / footprint) : 0;
+        rows2.push([p.name, gfaVal.toLocaleString(), d.l, d.w, d.h, nFloors, units.toLocaleString()]);
+      }
+    });
+    slide2.addTable(rows2, {
+      x: 0.5, y: 1.1, w: 9.0, colW: [2.4, 1.4, 0.8, 0.8, 0.8, 0.9, 1.0],
+      border: { pt: 0.5, color: 'FFFFFF', transparency: 80 },
+      fontSize: 11, color: 'FFFFFF', valign: 'middle'
+    });
+
+    // ── SLIDE 3: Benchmark Comparison ──────────────────────
+    const slide3 = pres.addSlide();
+    slide3.background = { color: '0a0b10' };
+    slide3.addShape(pres.ShapeType.rect, {
+      x: 0.25, y: 0.25, w: 9.5, h: 5.125,
+      fill: { color: 'FFFFFF', transparency: 95 },
+      line: { color: 'FFFFFF', transparency: 80, pt: 1 }, rectRadius: 0.05
+    });
+    slide3.addText(`DMAA — ${projName}  |  Benchmark Comparison`, {
+      x: 0.5, y: 0.4, w: 9.0, h: 0.4, fontSize: 20, bold: true, color: 'FFFFFF', fontFace: 'Arial'
+    });
+    const rows3 = [[
+      { text: 'Campus Reference',       options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'GFA / Employee (m²)',    options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } },
+      { text: 'vs. This Project',       options: { bold: true, color: 'FFFFFF', fill: '1a1b25' } }
+    ]];
+    Object.entries(benchmarks).forEach(([key, bData]) => {
+      if (key === 'custom') return;
+      const delta    = currentGFAPE > 0 ? ((currentGFAPE - bData.gfaPerEmp) / bData.gfaPerEmp * 100) : null;
+      const deltaStr = delta !== null ? (delta >= 0 ? `+${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`) : '—';
+      rows3.push([benchmarkNames[key], bData.gfaPerEmp.toFixed(1) + ' m²', deltaStr]);
+    });
+    rows3.push([
+      { text: projName + ' (This Project)', options: { bold: true, color: '00d4ff' } },
+      { text: currentGFAPE.toFixed(1) + ' m²', options: { bold: true, color: '00d4ff' } },
+      { text: '—', options: { color: 'AAAAAA' } }
+    ]);
+    slide3.addTable(rows3, {
+      x: 0.5, y: 1.1, w: 9.0, colW: [4.5, 2.5, 2.0],
+      border: { pt: 0.5, color: 'FFFFFF', transparency: 80 },
+      fontSize: 13, color: 'FFFFFF', valign: 'middle'
     });
 
     pres.writeFile({ fileName: `DMAA_${projName.replace(/\s+/g, '_')}_Summary.pptx` });
@@ -913,9 +1231,7 @@ function escapeHtml(text) {
 function formatDate(dateStr) {
   try {
     return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  } catch {
-    return dateStr;
-  }
+  } catch { return dateStr; }
 }
 
 
@@ -923,4 +1239,27 @@ function formatDate(dateStr) {
 window.addEventListener('DOMContentLoaded', () => {
   showView('dashboard');
   renderDashboard();
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    // Escape: close modal
+    if (e.key === 'Escape') closeModal();
+
+    // Ctrl/Cmd + S: save with visual confirmation
+    if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (currentProject) saveCurrentProject();
+    }
+
+    // Number keys 1–4: switch editor tabs (when not in an input)
+    if (currentView === 'editor' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = document.activeElement?.tagName;
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+        if (e.key === '1') switchEditorTab(0);
+        if (e.key === '2') switchEditorTab(1);
+        if (e.key === '3') switchEditorTab(2);
+        if (e.key === '4') switchEditorTab(3);
+      }
+    }
+  });
 });

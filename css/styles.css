@@ -1197,3 +1197,226 @@ body::before {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* ============================================================
+   NEW FEATURES — v2
+   ============================================================ */
+
+/* ─── Save Status Badge ───────────────────────────────────── */
+.save-status {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  transition: all var(--duration-normal) var(--ease-out);
+  white-space: nowrap;
+}
+.save-status.idle    { color: transparent; background: transparent; }
+.save-status.saving  { color: var(--text-muted); background: rgba(255,255,255,0.04); border-color: var(--glass-border); }
+.save-status.saved   { color: var(--accent-emerald); background: rgba(52, 211, 153, 0.08); border-color: rgba(52, 211, 153, 0.2); }
+.save-status.error   { color: var(--accent-coral); background: rgba(255, 107, 107, 0.08); border-color: rgba(255, 107, 107, 0.2); }
+
+/* ─── Locked Program Row ──────────────────────────────────── */
+.program-row-locked > td:first-child {
+  border-left: 2px solid var(--accent-amber);
+}
+
+/* ─── Lock / Unlock Button ────────────────────────────────── */
+.lock-btn {
+  color: var(--text-muted);
+}
+.lock-btn.locked {
+  color: var(--accent-amber);
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.3);
+}
+.lock-btn:hover {
+  color: var(--accent-amber);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+/* ─── Drag-to-Reorder ─────────────────────────────────────── */
+.drag-handle {
+  color: var(--text-muted);
+  cursor: grab;
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color var(--duration-fast);
+}
+.drag-handle:hover  { color: var(--text-secondary); }
+.drag-handle:active { cursor: grabbing; }
+.dragging           { opacity: 0.35; }
+.drag-over > td     { border-top: 2px solid var(--accent-cyan) !important; }
+
+/* ─── Surface / Volume Toggle ─────────────────────────────── */
+.btn-surface-toggle {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--duration-fast);
+  font-family: var(--font);
+  flex-shrink: 0;
+}
+.btn-surface-toggle:hover {
+  border-color: var(--glass-border-hover);
+  color: var(--text-primary);
+}
+.btn-surface-toggle.is-surface {
+  color: var(--accent-emerald);
+  border-color: rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.07);
+}
+
+/* ─── Program Bar on Dashboard Cards ─────────────────────── */
+.program-bar {
+  display: flex;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+/* ─── Dashboard Search Bar ────────────────────────────────── */
+.search-bar-wrapper {
+  position: relative;
+  margin-bottom: var(--space-lg);
+  max-width: 420px;
+}
+.search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.search-input {
+  width: 100%;
+  padding: 10px 16px 10px 40px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  transition: all var(--duration-fast);
+}
+.search-input:focus {
+  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.03);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
+}
+.search-input::placeholder { color: var(--text-muted); }
+
+/* ─── Benchmark Comparison Panel ──────────────────────────── */
+.benchmark-comparison-panel {
+  margin-bottom: var(--space-xl);
+}
+.benchmark-comparison-panel h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  color: var(--text-primary);
+}
+
+/* ─── Project Notes Textarea ──────────────────────────────── */
+#edit-notes {
+  width: 100%;
+  min-height: 100px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: all var(--duration-fast);
+}
+#edit-notes:focus {
+  border-color: rgba(0, 212, 255, 0.4);
+  background: rgba(0, 212, 255, 0.03);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.08);
+}
+#edit-notes::placeholder { color: var(--text-muted); }
+
+/* ─── 3D Viewport Controls Overlay ───────────────────────── */
+.viewport-controls {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 6px;
+  z-index: 10;
+}
+.viewport-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(10, 11, 16, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  font-family: var(--font);
+  letter-spacing: -0.1px;
+}
+.viewport-btn:hover {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.35);
+  color: var(--accent-cyan);
+}
+.viewport-btn-icon {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Export Grid (3-column) ──────────────────────────────── */
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-xl);
+}
+.export-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  gap: var(--space-lg);
+  text-align: center;
+}
+.export-panel-info h3 {
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+.export-panel-info p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 280px;
+}
+
+/* ─── Responsive additions ────────────────────────────────── */
+@media (max-width: 900px) {
+  .export-grid {
+    grid-template-columns: 1fr;
+  }
+}
