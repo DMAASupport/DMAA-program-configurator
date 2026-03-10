@@ -9,6 +9,7 @@ function migrateProject(p) {
   if (p.notes === undefined) p.notes = '';
   if (p.projectCode === undefined) p.projectCode = '';
   if (p.status === undefined) p.status = 'ongoing';
+  if (p.images === undefined) p.images = [];
 
   if (p.programs) {
     // Migrate program-level fields added in v2
@@ -45,8 +46,8 @@ const Store = {
     {
       id: 'proj-neom',
       projectCode: '586',
-      name: 'NEOM AI Campus',
-      client: 'NEOM Company',
+      name: 'AI Campus',
+      client: 'Confidential',
       typology: 'AI / Technology Campus',
       status: 'ongoing',
       employees: 5000,
@@ -434,20 +435,36 @@ let editorTabIndex = 0;
 function initEditor() {
   if (!currentProject) return;
 
+  const isPast = currentProject.status === 'past';
+
+  // Apply mode class to tab bar for CSS-driven tab visibility
+  const tabsEl = document.querySelector('.editor-tabs');
+  tabsEl.classList.toggle('mode-past', isPast);
+  tabsEl.classList.toggle('mode-ongoing', !isPast);
+
+  // Show/hide the correct overview section
+  document.getElementById('overview-ongoing').style.display = isPast ? 'none' : '';
+  document.getElementById('overview-past').style.display   = isPast ? ''     : 'none';
+
   document.getElementById('breadcrumb-project-name').textContent = currentProject.name;
+
+  // Always populate form fields (they persist in DOM even when hidden)
   document.getElementById('edit-project-code').value   = currentProject.projectCode || '';
   document.getElementById('edit-project-status').value = currentProject.status || 'ongoing';
-  document.getElementById('edit-name').value            = currentProject.name;
-  document.getElementById('edit-client').value        = currentProject.client;
-  document.getElementById('edit-typology').value      = currentProject.typology;
-  document.getElementById('edit-notes').value         = currentProject.notes || '';
-  document.getElementById('benchmark').value      = currentProject.benchmark;
-  document.getElementById('employees').value      = currentProject.employees;
-  document.getElementById('gfaPerEmp').value      = currentProject.gfaPerEmp;
-  document.getElementById('siteArea').value       = currentProject.siteArea || 0;
+  document.getElementById('edit-name').value           = currentProject.name;
+  document.getElementById('edit-client').value         = currentProject.client;
+  document.getElementById('edit-typology').value       = currentProject.typology;
+  document.getElementById('edit-notes').value          = currentProject.notes || '';
+  document.getElementById('benchmark').value           = currentProject.benchmark;
+  document.getElementById('employees').value           = currentProject.employees;
+  document.getElementById('gfaPerEmp').value           = currentProject.gfaPerEmp;
+  document.getElementById('siteArea').value            = currentProject.siteArea || 0;
+
+  if (isPast) renderPastOverview();
+  renderGallery();
 
   renderProgramTable();
-  renderCatalogTable();
+  if (!isPast) renderCatalogTable();
   switchEditorTab(0);
 
   if (!chartInstance) initChart();
@@ -459,10 +476,11 @@ function switchEditorTab(idx) {
   document.querySelectorAll('.editor-tab').forEach((btn, i) => btn.classList.toggle('active', i === idx));
   document.querySelectorAll('.tab-panel').forEach((panel, i) => panel.classList.toggle('active', i === idx));
 
-  document.getElementById('editor-btn-ppt').style.display = (idx === 1) ? 'inline-flex' : 'none';
-  document.getElementById('editor-btn-obj').style.display = (idx === 2) ? 'inline-flex' : 'none';
+  const isPast = currentProject?.status === 'past';
+  document.getElementById('editor-btn-ppt').style.display = (idx === 1 && !isPast) ? 'inline-flex' : 'none';
+  document.getElementById('editor-btn-obj').style.display = (idx === 2 && !isPast) ? 'inline-flex' : 'none';
 
-  if (idx === 2) {
+  if (idx === 2 && !isPast) {
     setTimeout(() => {
       if (!scene3d) init3D(); else resize3D();
       update3D();
@@ -488,6 +506,157 @@ function showSaveStatus(state) {
     el.textContent = 'Save failed';
     el.className = 'save-status error';
   }
+}
+
+
+// ─── Past Project Overview ─────────────────────────────────
+function renderPastOverview() {
+  const container = document.getElementById('overview-past');
+  if (!container || !currentProject) return;
+
+  const totalGFA  = currentProject.employees * currentProject.gfaPerEmp;
+  const programs  = currentProject.programs || [];
+  const year      = (currentProject.createdAt || '').split('-')[0];
+
+  const programRows = programs.map(p => {
+    const gfa = Math.round((p.share / 100) * totalGFA);
+    return `
+      <div class="past-program-row">
+        <div class="past-program-color" style="background:${p.color}"></div>
+        <div class="past-program-name">${escapeHtml(p.name)}</div>
+        <div class="past-program-share">${p.share}%</div>
+        <div class="past-program-gfa">${gfa.toLocaleString()} m²</div>
+      </div>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="past-overview-header">
+      <div class="past-overview-header-top">
+        <div>
+          ${currentProject.projectCode ? `<span class="project-card-code" style="margin-bottom:10px;display:inline-block;">${escapeHtml(currentProject.projectCode)}</span>` : ''}
+          <h1 class="past-overview-title">${escapeHtml(currentProject.name)}</h1>
+          <div class="past-overview-meta">${escapeHtml(currentProject.client)} &middot; ${escapeHtml(currentProject.typology)}${year ? ` &middot; ${year}` : ''}</div>
+        </div>
+        <select class="past-status-select" onchange="changeProjectStatus(this.value)">
+          <option value="past" selected>Past Project</option>
+          <option value="ongoing">Move to Ongoing</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="past-stat-grid">
+      <div class="past-stat-card">
+        <div class="past-stat-label">Total GFA</div>
+        <div class="past-stat-value">${totalGFA.toLocaleString()}<span class="past-stat-unit"> m²</span></div>
+      </div>
+      <div class="past-stat-card">
+        <div class="past-stat-label">Occupants</div>
+        <div class="past-stat-value">${currentProject.employees.toLocaleString()}</div>
+      </div>
+      <div class="past-stat-card">
+        <div class="past-stat-label">GFA / Occupant</div>
+        <div class="past-stat-value">${currentProject.gfaPerEmp}<span class="past-stat-unit"> m²</span></div>
+      </div>
+      ${currentProject.siteArea ? `
+      <div class="past-stat-card">
+        <div class="past-stat-label">Site Area</div>
+        <div class="past-stat-value">${currentProject.siteArea.toLocaleString()}<span class="past-stat-unit"> m²</span></div>
+      </div>` : ''}
+    </div>
+
+    <div class="overview-panel">
+      <h3>Program Breakdown</h3>
+      <div class="past-programs-list">${programRows}</div>
+    </div>
+
+    ${currentProject.notes ? `
+    <div class="overview-panel">
+      <h3>Notes</h3>
+      <div class="past-notes">${escapeHtml(currentProject.notes)}</div>
+    </div>` : ''}
+  `;
+}
+
+function changeProjectStatus(status) {
+  if (!currentProject) return;
+  currentProject.status = status;
+  document.getElementById('edit-project-status').value = status;
+  Store.update(currentProject);
+  initEditor();
+}
+
+
+// ─── Gallery ───────────────────────────────────────────────
+function renderGallery() {
+  const grid = document.getElementById('gallery-grid');
+  if (!grid || !currentProject) return;
+  const images = currentProject.images || [];
+
+  if (images.length === 0) {
+    grid.innerHTML = '<div class="gallery-empty">No images yet.</div>';
+    return;
+  }
+
+  grid.innerHTML = images.map(img => `
+    <div class="gallery-item">
+      <img src="${img.dataUrl}" alt="${escapeHtml(img.name)}">
+      <div class="gallery-item-footer">
+        <span class="gallery-item-name">${escapeHtml(img.name)}</span>
+        <button class="gallery-remove-btn" onclick="removeGalleryImage('${img.id}')" title="Remove">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function removeGalleryImage(id) {
+  if (!currentProject) return;
+  currentProject.images = (currentProject.images || []).filter(img => img.id !== id);
+  renderGallery();
+  try { Store.update(currentProject); } catch(e) { showSaveStatus('error'); }
+}
+
+function handleGalleryFiles(files) {
+  if (!currentProject || !files.length) return;
+  if (!currentProject.images) currentProject.images = [];
+  let pending = files.length;
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) { pending--; return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      currentProject.images.push({
+        id:      'img-' + Date.now() + '-' + Math.random().toString(36).slice(2),
+        name:    file.name,
+        dataUrl: e.target.result
+      });
+      if (--pending === 0) {
+        renderGallery();
+        showSaveStatus('saving');
+        try { Store.update(currentProject); showSaveStatus('saved'); }
+        catch(err) { showSaveStatus('error'); }
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function initGalleryDrop() {
+  const dropzone = document.getElementById('gallery-dropzone');
+  if (!dropzone) return;
+  dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    handleGalleryFiles(e.dataTransfer.files);
+  });
+  dropzone.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.multiple = true; input.accept = 'image/*';
+    input.onchange = () => handleGalleryFiles(input.files);
+    input.click();
+  });
 }
 
 
@@ -1317,6 +1486,7 @@ function formatDate(dateStr) {
 window.addEventListener('DOMContentLoaded', () => {
   showView('dashboard');
   renderDashboard();
+  initGalleryDrop();
 
   // Keyboard shortcuts
   document.addEventListener('keydown', e => {

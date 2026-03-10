@@ -108,6 +108,7 @@
             <button class="editor-tab" onclick="switchEditorTab(1)">Master Program</button>
             <button class="editor-tab" onclick="switchEditorTab(2)">3D Catalog</button>
             <button class="editor-tab" onclick="switchEditorTab(3)">Export</button>
+            <button class="editor-tab" onclick="switchEditorTab(4)">Gallery</button>
         </div>
 
         <!-- Editor Content -->
@@ -115,102 +116,109 @@
 
             <!-- ─── Tab 0: Overview ─── -->
             <div id="tab-panel-overview" class="tab-panel active">
-                <div class="section-title">Project Details</div>
 
-                <!-- KPI Cards -->
-                <div class="kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-label">Total Campus GFA <span class="info-dot" data-tooltip="Aggregate Gross Floor Area for the entire project">i</span></div>
-                        <div class="kpi-value" id="kpi-total-gfa" style="color: var(--accent-cyan);">0<span class="kpi-unit">m²</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Target Employees <span class="info-dot" data-tooltip="Total workforce capacity for the campus">i</span></div>
-                        <div class="kpi-value" id="kpi-employees" style="color: var(--accent-lavender);">0</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">GFA / Employee <span class="info-dot" data-tooltip="Gross Floor Area allocated per person">i</span></div>
-                        <div class="kpi-value" id="kpi-gfa-emp" style="color: var(--accent-emerald);">0<span class="kpi-unit">m²</span></div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Floor Area Ratio <span class="info-dot" data-tooltip="Total GFA ÷ Site Area — key planning regulation. Set Site Area below.">i</span></div>
-                        <div class="kpi-value" id="kpi-far" style="color: var(--accent-amber);">—</div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-label">Site Coverage <span class="info-dot" data-tooltip="Building footprint ÷ Site Area. Requires site area and 3D catalog dimensions.">i</span></div>
-                        <div class="kpi-value" id="kpi-scr" style="color: var(--accent-coral);">—</div>
-                    </div>
-                </div>
+                <!-- Read-only summary for PAST projects (rendered by JS) -->
+                <div id="overview-past"></div>
 
-                <!-- Benchmark Comparison Chart -->
-                <div class="overview-panel benchmark-comparison-panel">
-                    <h3>GFA / Employee — Benchmark Comparison</h3>
-                    <div style="height: 190px; position: relative;">
-                        <canvas id="benchmarkChart"></canvas>
-                    </div>
-                </div>
+                <!-- Full editor for ONGOING projects -->
+                <div id="overview-ongoing">
+                    <div class="section-title">Project Details</div>
 
-                <!-- Project Info + Quick Config -->
-                <div class="overview-grid">
-                    <div class="overview-panel">
-                        <h3>Project Information</h3>
-                        <div class="control-group">
-                            <label>Project Number</label>
-                            <input type="text" id="edit-project-code" placeholder="e.g. 586" onchange="saveCurrentProject()">
+                    <!-- KPI Cards -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Total Campus GFA <span class="info-dot" data-tooltip="Aggregate Gross Floor Area for the entire project">i</span></div>
+                            <div class="kpi-value" id="kpi-total-gfa" style="color: var(--accent-cyan);">0<span class="kpi-unit">m²</span></div>
                         </div>
-                        <div class="control-group">
-                            <label>Project Name</label>
-                            <input type="text" id="edit-name" placeholder="e.g. NEOM AI Campus" onchange="saveCurrentProject()">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Target Employees <span class="info-dot" data-tooltip="Total workforce capacity for the campus">i</span></div>
+                            <div class="kpi-value" id="kpi-employees" style="color: var(--accent-lavender);">0</div>
                         </div>
-                        <div class="control-group">
-                            <label>Client</label>
-                            <input type="text" id="edit-client" placeholder="e.g. NEOM Company" onchange="saveCurrentProject()">
+                        <div class="kpi-card">
+                            <div class="kpi-label">GFA / Employee <span class="info-dot" data-tooltip="Gross Floor Area allocated per person">i</span></div>
+                            <div class="kpi-value" id="kpi-gfa-emp" style="color: var(--accent-emerald);">0<span class="kpi-unit">m²</span></div>
                         </div>
-                        <div class="control-group">
-                            <label>Typology</label>
-                            <input type="text" id="edit-typology" placeholder="e.g. AI / Technology Campus" onchange="saveCurrentProject()">
+                        <div class="kpi-card">
+                            <div class="kpi-label">Floor Area Ratio <span class="info-dot" data-tooltip="Total GFA ÷ Site Area — key planning regulation. Set Site Area below.">i</span></div>
+                            <div class="kpi-value" id="kpi-far" style="color: var(--accent-amber);">—</div>
                         </div>
-                        <div class="control-group">
-                            <label>Status</label>
-                            <select id="edit-project-status" onchange="saveCurrentProject()">
-                                <option value="ongoing">Ongoing</option>
-                                <option value="past">Past Project</option>
-                            </select>
+                        <div class="kpi-card">
+                            <div class="kpi-label">Site Coverage <span class="info-dot" data-tooltip="Building footprint ÷ Site Area. Requires site area and 3D catalog dimensions.">i</span></div>
+                            <div class="kpi-value" id="kpi-scr" style="color: var(--accent-coral);">—</div>
                         </div>
                     </div>
 
-                    <div class="overview-panel">
-                        <h3>Quick Configuration</h3>
-                        <div class="control-group">
-                            <label>Reference Benchmark <span class="info-dot" data-tooltip="Starts with presets from renowned campuses">i</span></label>
-                            <select id="benchmark" onchange="loadBenchmark()">
-                                <option value="custom">Custom / Manual Input</option>
-                                <option value="apple">Apple Park</option>
-                                <option value="microsoft">Microsoft Redmond</option>
-                                <option value="google">Googleplex</option>
-                                <option value="meta">Meta Menlo Park</option>
-                                <option value="nvidia">Nvidia Campus</option>
-                            </select>
-                        </div>
-                        <div class="control-group">
-                            <label>Target Employees <span class="info-dot" data-tooltip="Estimated headcount working at this location">i</span></label>
-                            <input type="number" id="employees" value="5000" oninput="calculate()">
-                        </div>
-                        <div class="control-group">
-                            <label>GFA per Employee (m²) <span class="info-dot" data-tooltip="Standard space multiplier. Impacts total GFA.">i</span></label>
-                            <input type="number" id="gfaPerEmp" value="25" oninput="calculate()">
-                        </div>
-                        <div class="control-group">
-                            <label>Site Area (m²) <span class="info-dot" data-tooltip="Total site area used to calculate FAR and Site Coverage Ratio">i</span></label>
-                            <input type="number" id="siteArea" value="0" oninput="calculate()">
+                    <!-- Benchmark Comparison Chart -->
+                    <div class="overview-panel benchmark-comparison-panel">
+                        <h3>GFA / Employee — Benchmark Comparison</h3>
+                        <div style="height: 190px; position: relative;">
+                            <canvas id="benchmarkChart"></canvas>
                         </div>
                     </div>
-                </div>
 
-                <!-- Project Notes -->
-                <div class="notes-section">
-                    <div class="section-title">Project Notes</div>
-                    <div class="overview-panel">
-                        <textarea id="edit-notes" placeholder="Document client requirements, planning constraints, design decisions, phasing notes…" onchange="saveCurrentProject()"></textarea>
+                    <!-- Project Info + Quick Config -->
+                    <div class="overview-grid">
+                        <div class="overview-panel">
+                            <h3>Project Information</h3>
+                            <div class="control-group">
+                                <label>Project Number</label>
+                                <input type="text" id="edit-project-code" placeholder="e.g. 586" onchange="saveCurrentProject()">
+                            </div>
+                            <div class="control-group">
+                                <label>Project Name</label>
+                                <input type="text" id="edit-name" placeholder="e.g. AI Campus" onchange="saveCurrentProject()">
+                            </div>
+                            <div class="control-group">
+                                <label>Client</label>
+                                <input type="text" id="edit-client" placeholder="e.g. Confidential" onchange="saveCurrentProject()">
+                            </div>
+                            <div class="control-group">
+                                <label>Typology</label>
+                                <input type="text" id="edit-typology" placeholder="e.g. AI / Technology Campus" onchange="saveCurrentProject()">
+                            </div>
+                            <div class="control-group">
+                                <label>Status</label>
+                                <select id="edit-project-status" onchange="saveCurrentProject()">
+                                    <option value="ongoing">Ongoing</option>
+                                    <option value="past">Past Project</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="overview-panel">
+                            <h3>Quick Configuration</h3>
+                            <div class="control-group">
+                                <label>Reference Benchmark <span class="info-dot" data-tooltip="Starts with presets from renowned campuses">i</span></label>
+                                <select id="benchmark" onchange="loadBenchmark()">
+                                    <option value="custom">Custom / Manual Input</option>
+                                    <option value="apple">Apple Park</option>
+                                    <option value="microsoft">Microsoft Redmond</option>
+                                    <option value="google">Googleplex</option>
+                                    <option value="meta">Meta Menlo Park</option>
+                                    <option value="nvidia">Nvidia Campus</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Target Employees <span class="info-dot" data-tooltip="Estimated headcount working at this location">i</span></label>
+                                <input type="number" id="employees" value="5000" oninput="calculate()">
+                            </div>
+                            <div class="control-group">
+                                <label>GFA per Employee (m²) <span class="info-dot" data-tooltip="Standard space multiplier. Impacts total GFA.">i</span></label>
+                                <input type="number" id="gfaPerEmp" value="25" oninput="calculate()">
+                            </div>
+                            <div class="control-group">
+                                <label>Site Area (m²) <span class="info-dot" data-tooltip="Total site area used to calculate FAR and Site Coverage Ratio">i</span></label>
+                                <input type="number" id="siteArea" value="0" oninput="calculate()">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Project Notes -->
+                    <div class="notes-section">
+                        <div class="section-title">Project Notes</div>
+                        <div class="overview-panel">
+                            <textarea id="edit-notes" placeholder="Document client requirements, planning constraints, design decisions, phasing notes…" onchange="saveCurrentProject()"></textarea>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -363,6 +371,17 @@
                     </div>
 
                 </div>
+            </div>
+
+            <!-- ─── Tab 4: Gallery ─── -->
+            <div id="tab-panel-gallery" class="tab-panel">
+                <div class="section-title">Renders &amp; Plans</div>
+                <div class="gallery-dropzone" id="gallery-dropzone">
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.35"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    <div class="gallery-dropzone-text">Drop images here or click to browse</div>
+                    <div class="gallery-dropzone-sub">PNG · JPG · WEBP renders and plans</div>
+                </div>
+                <div class="gallery-grid" id="gallery-grid"></div>
             </div>
         </div>
     </div>

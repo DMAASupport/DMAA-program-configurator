@@ -1421,6 +1421,233 @@ body::before {
   background: rgba(52, 211, 153, 0.07);
 }
 
+/* ─── Tab mode visibility ─────────────────────────────────── */
+/* Past projects: hide 3D Catalog (3rd) and Export (4th), show Gallery (5th) */
+.mode-past .editor-tab:nth-child(3),
+.mode-past .editor-tab:nth-child(4) { display: none; }
+
+/* Ongoing projects: hide Gallery (5th) */
+.mode-ongoing .editor-tab:nth-child(5) { display: none; }
+
+
+/* ─── Past Project Overview ───────────────────────────────── */
+.past-overview-header {
+  margin-bottom: var(--space-xl);
+}
+
+.past-overview-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.past-overview-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+  margin: 6px 0 8px;
+  line-height: 1.1;
+}
+
+.past-overview-meta {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.past-status-select {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: var(--font);
+  padding: 6px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.past-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-md);
+  margin-bottom: var(--space-xl);
+}
+
+.past-stat-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+.past-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.past-stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.past-stat-unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.past-programs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: var(--space-sm);
+}
+
+.past-program-row {
+  display: grid;
+  grid-template-columns: 12px 1fr 60px 100px;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.past-program-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.past-program-name {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.past-program-share {
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.past-program-gfa {
+  font-size: 14px;
+  color: var(--text-secondary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.past-notes {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+
+/* ─── Gallery Tab ─────────────────────────────────────────── */
+.gallery-dropzone {
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-2xl) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  transition: border-color var(--duration-fast), background var(--duration-fast);
+  margin-bottom: var(--space-xl);
+  text-align: center;
+}
+
+.gallery-dropzone:hover,
+.gallery-dropzone.drag-over {
+  border-color: var(--accent-cyan);
+  background: rgba(0, 212, 255, 0.04);
+}
+
+.gallery-dropzone-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.gallery-dropzone-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-lg);
+}
+
+.gallery-item {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gallery-item img {
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  display: block;
+}
+
+.gallery-item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px var(--space-md);
+  gap: var(--space-sm);
+}
+
+.gallery-item-name {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gallery-remove-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color var(--duration-fast);
+}
+
+.gallery-remove-btn:hover { color: var(--accent-coral); }
+
+.gallery-empty {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+
 /* ─── Program Bar on Dashboard Cards ─────────────────────── */
 .program-bar {
   display: flex;
