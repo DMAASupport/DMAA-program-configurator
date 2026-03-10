@@ -92,10 +92,14 @@ const Store = {
         // Remove retired seed projects
         const retired = ['proj-vienna', 'proj-zurich'];
         projects = projects.filter(p => !retired.includes(p.id));
-        // Inject any seed projects that are missing from existing data
+        // Inject missing seed projects; sync status + projectCode from seed
         this.defaults.forEach(seed => {
-          if (!projects.find(p => p.id === seed.id)) {
+          const existing = projects.find(p => p.id === seed.id);
+          if (!existing) {
             projects.unshift(migrateProject(JSON.parse(JSON.stringify(seed))));
+          } else {
+            if (seed.status) existing.status = seed.status;
+            if (seed.projectCode) existing.projectCode = seed.projectCode;
           }
         });
         this.save(projects);
