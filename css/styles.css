@@ -417,7 +417,7 @@ body::before {
 }
 
 .project-section + .project-section {
-  margin-top: var(--space-xl);
+  margin-top: var(--space-3xl);
 }
 
 .section-heading {
