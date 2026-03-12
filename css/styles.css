@@ -1423,10 +1423,10 @@ body::before {
 
 /* ─── Tab mode visibility ─────────────────────────────────── */
 /* Past projects: hide the entire tab bar — single scrollable page */
-.mode-past .editor-tabs { display: none; }
+.editor-tabs.mode-past { display: none; }
 
-/* Ongoing projects: hide Gallery (5th) */
-.mode-ongoing .editor-tab:nth-child(5) { display: none; }
+/* Ongoing projects: hide Gallery (5th tab button) */
+.editor-tabs.mode-ongoing .editor-tab:nth-child(5) { display: none; }
 
 
 /* ─── Past Project Overview ───────────────────────────────── */
